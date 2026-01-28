@@ -77,6 +77,16 @@ pattern_mining:
   top_features: 50
   use_shap: true
   
+ranking:
+  weights:
+    sharpe_ratio: 0.25
+    sortino_ratio: 0.20
+    calmar_ratio: 0.15
+    win_rate: 0.15
+    profit_factor: 0.15
+    max_drawdown: 0.10
+  top_n: 13  # Number of legendaries
+  
 strategies:
   categories:
     - trend

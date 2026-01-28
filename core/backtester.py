@@ -257,7 +257,7 @@ def rank_strategies(metrics: pd.DataFrame) -> pd.DataFrame:
 
 def run_backtest_workflow(patterns: pd.DataFrame, labels: pd.DataFrame, 
                           risk_levels: List[float], initial_balance: float = 200,
-                          output_dir: str = "results") -> pd.DataFrame:
+                          output_dir: str = "results", return_full_results: bool = False) -> pd.DataFrame:
     """
     Run complete backtest workflow.
     
@@ -267,9 +267,10 @@ def run_backtest_workflow(patterns: pd.DataFrame, labels: pd.DataFrame,
         risk_levels: List of risk levels to test
         initial_balance: Initial balance
         output_dir: Directory to save results
+        return_full_results: If True, return tuple of (ranking, results_dict)
         
     Returns:
-        DataFrame with ranked strategies
+        DataFrame with ranked strategies, or tuple of (ranking, results_dict) if return_full_results=True
     """
     print(f"\n{'='*60}")
     print(f"🔬 BACKTEST")
@@ -296,4 +297,6 @@ def run_backtest_workflow(patterns: pd.DataFrame, labels: pd.DataFrame,
     print(f"✅ BACKTEST COMPLETE - Report: {report_path}")
     print(f"{'='*60}\n")
     
+    if return_full_results:
+        return ranking, results
     return ranking

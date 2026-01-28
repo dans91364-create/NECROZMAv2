@@ -21,6 +21,8 @@ from core.patterns import discover_strategies, run_patterns_workflow
 from core.backtester import run_backtest_workflow
 from core.regime_detector import RegimeDetector
 from core.pattern_miner import PatternMiner
+from core.light_finder import LightFinder
+from core.light_report import LightReport
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -232,6 +234,7 @@ def cmd_full(args, config):
         
         # Process each pair
         all_pair_results = []
+        all_backtest_results = {}  # Collect all raw backtest results
         
         for pair_idx, (pair, m1_universe) in enumerate(pair_m1_data.items(), 1):
             print(f"\n{'='*80}")
@@ -254,6 +257,7 @@ def cmd_full(args, config):
             
             # Step 4: Process each universe
             pair_results = []
+            pair_backtest_results = {}  # Store raw backtest results
             
             for universe_idx, (universe_name, universe_df) in enumerate(universes.items(), 1):
                 # Parse interval and lookback from universe name
@@ -332,13 +336,19 @@ def cmd_full(args, config):
                 # Run backtest for each label config
                 for label_config, labels in labels_dict.items():
                     output_dir_universe = Path(f"results/{year}-{month:02d}/{pair}/{universe_name}/{label_config}")
-                    ranking = run_backtest_workflow(
+                    ranking, backtest_results = run_backtest_workflow(
                         patterns,
                         labels,
                         config['backtest']['risk_levels'],
                         config['backtest']['initial_balance'],
-                        str(output_dir_universe)
+                        str(output_dir_universe),
+                        return_full_results=True
                     )
+                    
+                    # Store backtest results for multi-objective ranking
+                    for key, result in backtest_results.items():
+                        full_key = f"{pair}_{universe_name}_{label_config}_{key}"
+                        pair_backtest_results[full_key] = result
                     
                     # Add pair, interval, lookback, and label_config info to ranking
                     ranking['pair'] = pair
@@ -352,6 +362,9 @@ def cmd_full(args, config):
             if pair_results:
                 pair_combined = pd.concat(pair_results, ignore_index=True)
                 all_pair_results.append(pair_combined)
+            
+            # Store all backtest results from this pair
+            all_backtest_results.update(pair_backtest_results)
         
         # Combine all results from all pairs and universes
         print(f"\n{'='*80}")
@@ -363,14 +376,29 @@ def cmd_full(args, config):
         combined = combined.sort_values('total_return', ascending=False).reset_index(drop=True)
         combined.insert(0, 'overall_rank', range(1, len(combined) + 1))
         
-        # Save combined ranking
+        # Save combined ranking (old method)
         final_output_dir = Path(f"results/{year}-{month:02d}")
         final_ranking_path = final_output_dir / "ranking_all_pairs_universes.csv"
         combined.to_csv(final_ranking_path, index=False)
         
+        # Apply multi-objective ranking
+        print(f"\n🌟 Ranking strategies with multi-objective scoring...")
+        finder = LightFinder(weights=config.get('ranking', {}).get('weights'))
+        mo_ranking = finder.rank_strategies(all_backtest_results)
+        
+        # Get top 13 legendaries
+        top_n = config.get('ranking', {}).get('top_n', 13)
+        legendaries = finder.get_legendaries(mo_ranking, n=top_n)
+        
+        # Generate reports
+        print(f"\n📄 Generating reports...")
+        report = LightReport(output_dir=str(final_output_dir))
+        report.generate_all(mo_ranking, legendaries)
+        
         # Show top 13 (the Legendaries)
-        print(f"🏆 TOP 13 LENDÁRIOS:\n")
-        print(combined.head(13).to_string(index=False))
+        print(f"\n🏆 TOP 13 LENDÁRIOS (by composite score):\n")
+        print(legendaries[['rank', 'strategy', 'risk_level', 'total_return', 'sharpe_ratio', 
+                           'sortino_ratio', 'win_rate', 'max_drawdown', 'composite_score']].to_string(index=False))
         
     else:
         # Single pair mode - now also with multiple universes
@@ -392,6 +420,7 @@ def cmd_full(args, config):
         
         # Step 4: Process each universe
         all_results = []
+        all_backtest_results = {}  # Store raw backtest results
         
         for universe_idx, (universe_name, universe_df) in enumerate(universes.items(), 1):
             # Parse interval and lookback from universe name
@@ -470,13 +499,19 @@ def cmd_full(args, config):
             # Run backtest for each label config
             for label_config, labels in labels_dict.items():
                 output_dir_universe = Path(f"results/{year}-{month:02d}/{universe_name}/{label_config}")
-                ranking = run_backtest_workflow(
+                ranking, backtest_results = run_backtest_workflow(
                     patterns,
                     labels,
                     config['backtest']['risk_levels'],
                     config['backtest']['initial_balance'],
-                    str(output_dir_universe)
+                    str(output_dir_universe),
+                    return_full_results=True
                 )
+                
+                # Store backtest results for multi-objective ranking
+                for key, result in backtest_results.items():
+                    full_key = f"{universe_name}_{label_config}_{key}"
+                    all_backtest_results[full_key] = result
                 
                 # Add interval, lookback, and label_config info to ranking
                 ranking['interval'] = interval
@@ -495,14 +530,29 @@ def cmd_full(args, config):
         combined = combined.sort_values('total_return', ascending=False).reset_index(drop=True)
         combined.insert(0, 'overall_rank', range(1, len(combined) + 1))
         
-        # Save combined ranking
+        # Save combined ranking (old method)
         final_output_dir = Path(f"results/{year}-{month:02d}")
         final_ranking_path = final_output_dir / "ranking_all_universes.csv"
         combined.to_csv(final_ranking_path, index=False)
         
+        # Apply multi-objective ranking
+        print(f"\n🌟 Ranking strategies with multi-objective scoring...")
+        finder = LightFinder(weights=config.get('ranking', {}).get('weights'))
+        mo_ranking = finder.rank_strategies(all_backtest_results)
+        
+        # Get top 13 legendaries
+        top_n = config.get('ranking', {}).get('top_n', 13)
+        legendaries = finder.get_legendaries(mo_ranking, n=top_n)
+        
+        # Generate reports
+        print(f"\n📄 Generating reports...")
+        report = LightReport(output_dir=str(final_output_dir))
+        report.generate_all(mo_ranking, legendaries)
+        
         # Show top 13 (the Legendaries)
-        print(f"🏆 TOP 13 LENDÁRIOS:\n")
-        print(combined.head(13).to_string(index=False))
+        print(f"\n🏆 TOP 13 LENDÁRIOS (by composite score):\n")
+        print(legendaries[['rank', 'strategy', 'risk_level', 'total_return', 'sharpe_ratio', 
+                           'sortino_ratio', 'win_rate', 'max_drawdown', 'composite_score']].to_string(index=False))
     
     # Calculate execution time
     end_time = datetime.now()
