@@ -41,6 +41,14 @@ data:
     # Index (1)
     - DXY
 
+labeling:
+  target_pips: [5, 10, 15, 20, 30, 50]   # Take profit levels in pips
+  stop_pips: [5, 10, 15, 20, 30]          # Stop loss levels in pips
+  horizons: [30, 60, 120, 240, 480, 1440] # Time horizons in minutes
+  use_numba: true                          # Enable Numba JIT compilation
+  use_cache: true                          # Cache labels to disk
+  cache_dir: "data/labels"                 # Label cache directory
+
 analysis:
   intervals: [1, 5, 15, 30, 60]  # Timeframes in minutes
   lookbacks: [5, 10, 15, 20, 30]  # Lookback periods

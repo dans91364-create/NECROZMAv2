@@ -5,11 +5,13 @@ This module handles:
 - Calculating forward returns
 - Creating win/loss labels based on TP/SL
 - Defining target levels
+- Multi-dimensional labeling with Numba optimization
 """
 
 import pandas as pd
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Dict
+from core.labeler import label_dataframe, load_label_results
 
 
 def calculate_forward_returns(df: pd.DataFrame, periods: List[int] = [1, 5, 10, 20, 50, 100]) -> pd.DataFrame:
@@ -174,33 +176,67 @@ def define_targets(df: pd.DataFrame, tp_pips: float = 10.0, sl_pips: float = 10.
     return df
 
 
-def run_label_workflow(universe: pd.DataFrame, tp_pips: float = 10.0, sl_pips: float = 10.0) -> pd.DataFrame:
+def run_label_workflow(universe: pd.DataFrame, config: dict = None, 
+                      tp_pips: float = None, sl_pips: float = None) -> Dict[str, pd.DataFrame]:
     """
-    Run complete label creation workflow.
+    Run complete label creation workflow with multi-config support.
+    
+    If config is provided, uses multi-dimensional labeling from core.labeler.
+    Otherwise falls back to simple labeling for backward compatibility.
     
     Args:
         universe: Universe DataFrame
-        tp_pips: Take profit in pips
-        sl_pips: Stop loss in pips
+        config: Configuration dictionary (optional)
+        tp_pips: Take profit in pips (for simple mode)
+        sl_pips: Stop loss in pips (for simple mode)
         
     Returns:
-        DataFrame with labels and targets
+        Dict mapping config name to DataFrame with labels, or single DataFrame for simple mode
     """
-    print(f"\n{'='*60}")
-    print(f"🏷️  LABEL CREATION")
-    print(f"{'='*60}\n")
-    
-    # Step 1: Calculate forward returns
-    df = calculate_forward_returns(universe)
-    
-    # Step 2: Create labels
-    df = create_labels(df, tp_pips, sl_pips)
-    
-    # Step 3: Define targets
-    df = define_targets(df, tp_pips, sl_pips)
-    
-    print(f"\n{'='*60}")
-    print(f"✅ LABELS CREATED - {len(df)} bars labeled")
-    print(f"{'='*60}\n")
-    
-    return df
+    # Check if multi-config mode is enabled
+    if config and 'labeling' in config:
+        labeling_config = config['labeling']
+        target_pips = labeling_config.get('target_pips', [10])
+        stop_pips = labeling_config.get('stop_pips', [10])
+        horizons = labeling_config.get('horizons', [60])
+        use_cache = labeling_config.get('use_cache', True)
+        cache_dir = labeling_config.get('cache_dir', 'data/labels')
+        
+        # Use new multi-dimensional labeler
+        labels_dict = label_dataframe(
+            universe,
+            target_pips=target_pips,
+            stop_pips=stop_pips,
+            horizons=horizons,
+            use_cache=use_cache,
+            cache_dir=cache_dir
+        )
+        
+        return labels_dict
+    else:
+        # Backward compatibility - simple mode
+        print(f"\n{'='*60}")
+        print(f"🏷️  LABEL CREATION (Simple Mode)")
+        print(f"{'='*60}\n")
+        
+        # Use default values if not provided
+        if tp_pips is None:
+            tp_pips = 10.0
+        if sl_pips is None:
+            sl_pips = 10.0
+        
+        # Step 1: Calculate forward returns
+        df = calculate_forward_returns(universe)
+        
+        # Step 2: Create labels
+        df = create_labels(df, tp_pips, sl_pips)
+        
+        # Step 3: Define targets
+        df = define_targets(df, tp_pips, sl_pips)
+        
+        print(f"\n{'='*60}")
+        print(f"✅ LABELS CREATED - {len(df)} bars labeled")
+        print(f"{'='*60}\n")
+        
+        # Return as dict for consistency
+        return {'default': df}

@@ -153,11 +153,16 @@ def cmd_backtest(args, config):
     universe_path = Path(f"data/universe/universe_{year}_{month:02d}.parquet")
     universe = pd.read_parquet(universe_path)
     
-    # Create labels
-    labels = run_label_workflow(universe)
+    # Create labels (multi-config mode)
+    labels_dict = run_label_workflow(universe, config)
     
-    # Run backtest
+    # Run backtest for each label config
     output_dir = Path(f"results/{year}-{month:02d}")
+    
+    # For simple backtest command, use first config or default
+    first_config = list(labels_dict.keys())[0]
+    labels = labels_dict[first_config]
+    
     ranking = run_backtest_workflow(
         patterns,
         labels,
@@ -165,6 +170,9 @@ def cmd_backtest(args, config):
         config['backtest']['initial_balance'],
         str(output_dir)
     )
+    
+    # Add label config to ranking
+    ranking['label_config'] = first_config
     
     print(f"\n✅ Backtest complete! Results in: {output_dir}\n")
 
@@ -263,28 +271,30 @@ def cmd_full(args, config):
                 print(f"📊 {pair} - Universe {universe_idx}/{len(universes)}: {interval}m, lookback={lookback}")
                 print(f"{'─'*60}\n")
                 
-                # Create labels for this universe
-                labels = run_label_workflow(universe_df)
+                # Create labels for this universe (multi-config mode)
+                labels_dict = run_label_workflow(universe_df, config)
                 
                 # Generate patterns
                 patterns = run_patterns_workflow(universe_df, strategies, lookback)
                 
-                # Run backtest for this universe
-                output_dir_universe = Path(f"results/{year}-{month:02d}/{pair}/{universe_name}")
-                ranking = run_backtest_workflow(
-                    patterns,
-                    labels,
-                    config['backtest']['risk_levels'],
-                    config['backtest']['initial_balance'],
-                    str(output_dir_universe)
-                )
-                
-                # Add pair, interval, and lookback info to ranking
-                ranking['pair'] = pair
-                ranking['interval'] = interval
-                ranking['lookback'] = lookback
-                
-                pair_results.append(ranking)
+                # Run backtest for each label config
+                for label_config, labels in labels_dict.items():
+                    output_dir_universe = Path(f"results/{year}-{month:02d}/{pair}/{universe_name}/{label_config}")
+                    ranking = run_backtest_workflow(
+                        patterns,
+                        labels,
+                        config['backtest']['risk_levels'],
+                        config['backtest']['initial_balance'],
+                        str(output_dir_universe)
+                    )
+                    
+                    # Add pair, interval, lookback, and label_config info to ranking
+                    ranking['pair'] = pair
+                    ranking['interval'] = interval
+                    ranking['lookback'] = lookback
+                    ranking['label_config'] = label_config
+                    
+                    pair_results.append(ranking)
             
             # Combine results for this pair
             if pair_results:
@@ -349,27 +359,29 @@ def cmd_full(args, config):
             print(f"📊 Universe {universe_idx}/{len(universes)}: {interval}m, lookback={lookback}")
             print(f"{'─'*60}\n")
             
-            # Create labels for this universe
-            labels = run_label_workflow(universe_df)
+            # Create labels for this universe (multi-config mode)
+            labels_dict = run_label_workflow(universe_df, config)
             
             # Generate patterns
             patterns = run_patterns_workflow(universe_df, strategies, lookback)
             
-            # Run backtest for this universe
-            output_dir_universe = Path(f"results/{year}-{month:02d}/{universe_name}")
-            ranking = run_backtest_workflow(
-                patterns,
-                labels,
-                config['backtest']['risk_levels'],
-                config['backtest']['initial_balance'],
-                str(output_dir_universe)
-            )
-            
-            # Add interval and lookback info to ranking
-            ranking['interval'] = interval
-            ranking['lookback'] = lookback
-            
-            all_results.append(ranking)
+            # Run backtest for each label config
+            for label_config, labels in labels_dict.items():
+                output_dir_universe = Path(f"results/{year}-{month:02d}/{universe_name}/{label_config}")
+                ranking = run_backtest_workflow(
+                    patterns,
+                    labels,
+                    config['backtest']['risk_levels'],
+                    config['backtest']['initial_balance'],
+                    str(output_dir_universe)
+                )
+                
+                # Add interval, lookback, and label_config info to ranking
+                ranking['interval'] = interval
+                ranking['lookback'] = lookback
+                ranking['label_config'] = label_config
+                
+                all_results.append(ranking)
         
         # Combine all results
         print(f"\n{'='*80}")
