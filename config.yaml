@@ -57,6 +57,25 @@ backtest:
   lookbacks: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
   risk_levels: [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5]
   initial_balance: 200
+
+regime:
+  n_regimes: 4
+  method: "hdbscan"  # or "kmeans"
+  min_cluster_size: 100
+  features:
+    - volatility
+    - trend_strength
+    - momentum
+    - range_pct
+
+pattern_mining:
+  enabled: true
+  methods:
+    - xgboost
+    - random_forest
+    - permutation
+  top_features: 50
+  use_shap: true
   
 strategies:
   categories:
