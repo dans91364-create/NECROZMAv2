@@ -19,6 +19,8 @@ from core.universe import run_universe_workflow, create_all_universes
 from core.label import run_label_workflow
 from core.patterns import discover_strategies, run_patterns_workflow
 from core.backtester import run_backtest_workflow
+from core.regime_detector import RegimeDetector
+from core.pattern_miner import PatternMiner
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -271,11 +273,61 @@ def cmd_full(args, config):
                 print(f"📊 {pair} - Universe {universe_idx}/{len(universes)}: {interval}m, lookback={lookback}")
                 print(f"{'─'*60}\n")
                 
+                # Step 2.5: Detect Market Regimes (if enabled)
+                universe_with_regimes = universe_df.copy()
+                if config.get('regime', {}).get('n_regimes', 0) > 0:
+                    print(f"🔮 Detecting market regimes...")
+                    try:
+                        detector = RegimeDetector(
+                            n_regimes=config['regime']['n_regimes'],
+                            method=config['regime'].get('method', 'hdbscan'),
+                            min_cluster_size=config['regime'].get('min_cluster_size', 100)
+                        )
+                        universe_with_regimes = detector.detect_regimes(universe_df)
+                        regime_analysis = detector.analyze_regimes(universe_with_regimes)
+                        
+                        print(f"   Detected {regime_analysis['n_regimes']} regimes:")
+                        for regime_id, regime_info in regime_analysis['regimes'].items():
+                            print(f"   - {regime_info['name']}: {regime_info['pct']:.1f}% of data")
+                    except Exception as e:
+                        print(f"   ⚠️  Regime detection failed: {e}")
+                        universe_with_regimes = universe_df.copy()
+                
                 # Create labels for this universe (multi-config mode)
-                labels_dict = run_label_workflow(universe_df, config)
+                labels_dict = run_label_workflow(universe_with_regimes, config)
+                
+                # Step 2.6: Mine Patterns (if enabled)
+                pattern_mining_enabled = config.get('pattern_mining', {}).get('enabled', False)
+                if pattern_mining_enabled and labels_dict:
+                    print(f"\n⛏️  Mining patterns with ML...")
+                    try:
+                        # Use first label config for pattern mining
+                        first_label_config = list(labels_dict.keys())[0]
+                        first_labels = labels_dict[first_label_config]
+                        
+                        miner = PatternMiner(
+                            use_shap=config['pattern_mining'].get('use_shap', True),
+                            top_features=config['pattern_mining'].get('top_features', 50)
+                        )
+                        mining_results = miner.discover_patterns(universe_with_regimes, first_labels)
+                        
+                        importance = miner.get_feature_importance()
+                        if len(importance) > 0:
+                            print(f"   Top 10 important features:")
+                            for idx, row in importance.head(10).iterrows():
+                                print(f"   {idx+1}. {row['feature']}: {row['importance']:.4f}")
+                            
+                            # Save patterns
+                            patterns_output_dir = Path(f"results/{year}-{month:02d}/{pair}/{universe_name}")
+                            patterns_output_dir.mkdir(parents=True, exist_ok=True)
+                            patterns_path = patterns_output_dir / "ml_patterns.csv"
+                            importance.to_csv(patterns_path, index=False)
+                            print(f"   💾 ML patterns saved: {patterns_path}")
+                    except Exception as e:
+                        print(f"   ⚠️  Pattern mining failed: {e}")
                 
                 # Generate patterns
-                patterns = run_patterns_workflow(universe_df, strategies, lookback)
+                patterns = run_patterns_workflow(universe_with_regimes, strategies, lookback)
                 
                 # Run backtest for each label config
                 for label_config, labels in labels_dict.items():
@@ -359,11 +411,61 @@ def cmd_full(args, config):
             print(f"📊 Universe {universe_idx}/{len(universes)}: {interval}m, lookback={lookback}")
             print(f"{'─'*60}\n")
             
+            # Step 2.5: Detect Market Regimes (if enabled)
+            universe_with_regimes = universe_df.copy()
+            if config.get('regime', {}).get('n_regimes', 0) > 0:
+                print(f"🔮 Detecting market regimes...")
+                try:
+                    detector = RegimeDetector(
+                        n_regimes=config['regime']['n_regimes'],
+                        method=config['regime'].get('method', 'hdbscan'),
+                        min_cluster_size=config['regime'].get('min_cluster_size', 100)
+                    )
+                    universe_with_regimes = detector.detect_regimes(universe_df)
+                    regime_analysis = detector.analyze_regimes(universe_with_regimes)
+                    
+                    print(f"   Detected {regime_analysis['n_regimes']} regimes:")
+                    for regime_id, regime_info in regime_analysis['regimes'].items():
+                        print(f"   - {regime_info['name']}: {regime_info['pct']:.1f}% of data")
+                except Exception as e:
+                    print(f"   ⚠️  Regime detection failed: {e}")
+                    universe_with_regimes = universe_df.copy()
+            
             # Create labels for this universe (multi-config mode)
-            labels_dict = run_label_workflow(universe_df, config)
+            labels_dict = run_label_workflow(universe_with_regimes, config)
+            
+            # Step 2.6: Mine Patterns (if enabled)
+            pattern_mining_enabled = config.get('pattern_mining', {}).get('enabled', False)
+            if pattern_mining_enabled and labels_dict:
+                print(f"\n⛏️  Mining patterns with ML...")
+                try:
+                    # Use first label config for pattern mining
+                    first_label_config = list(labels_dict.keys())[0]
+                    first_labels = labels_dict[first_label_config]
+                    
+                    miner = PatternMiner(
+                        use_shap=config['pattern_mining'].get('use_shap', True),
+                        top_features=config['pattern_mining'].get('top_features', 50)
+                    )
+                    mining_results = miner.discover_patterns(universe_with_regimes, first_labels)
+                    
+                    importance = miner.get_feature_importance()
+                    if len(importance) > 0:
+                        print(f"   Top 10 important features:")
+                        for idx, row in importance.head(10).iterrows():
+                            print(f"   {idx+1}. {row['feature']}: {row['importance']:.4f}")
+                        
+                        # Save patterns
+                        patterns_output_dir = Path(f"results/{year}-{month:02d}/{universe_name}")
+                        patterns_output_dir.mkdir(parents=True, exist_ok=True)
+                        patterns_path = patterns_output_dir / "ml_patterns.csv"
+                        importance.to_csv(patterns_path, index=False)
+                        print(f"   💾 ML patterns saved: {patterns_path}")
+                except Exception as e:
+                    print(f"   ⚠️  Pattern mining failed: {e}")
             
             # Generate patterns
-            patterns = run_patterns_workflow(universe_df, strategies, lookback)
+            patterns = run_patterns_workflow(universe_with_regimes, strategies, lookback)
             
             # Run backtest for each label config
             for label_config, labels in labels_dict.items():
