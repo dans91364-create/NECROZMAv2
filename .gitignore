@@ -3,6 +3,7 @@ data/raw/*.csv
 data/parquet/*.parquet
 data/universe/*.parquet
 data/patterns/*.parquet
+data/labels/*.pkl
 *.csv
 
 # Results
