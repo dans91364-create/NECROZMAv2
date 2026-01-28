@@ -70,15 +70,20 @@ def create_sample_universe(num_bars: int = 1440) -> pd.DataFrame:
     """
     Create sample OHLCV data for quick testing.
     
+    Generates realistic price data using random walk simulation and calculates
+    all base indicators required by the strategy framework (RSI, MACD, Bollinger
+    Bands, ATR, etc.) via calculate_base_indicators from core.universe.
+    
     Args:
-        num_bars: Number of M1 bars (1440 = 1 day)
+        num_bars: Number of M1 bars to generate (default: 1440 = 1 day)
         
     Returns:
-        DataFrame with sample OHLCV data
+        DataFrame with columns: open, high, low, close, volume, plus ~25 base
+        technical indicators added by calculate_base_indicators()
     """
     print(f"📊 Generating sample data ({num_bars} bars)...")
     
-    np.random.seed(42)
+    np.random.seed(42)  # Reproducible random data
     
     # Generate realistic price data (EURUSD-like)
     base_price = 1.1000
@@ -89,16 +94,19 @@ def create_sample_universe(num_bars: int = 1440) -> pd.DataFrame:
     start_date = pd.Timestamp("2026-01-01 00:00:00")
     dates = pd.date_range(start=start_date, periods=num_bars, freq='1min')
     
-    # Create OHLCV data
+    # Create OHLCV data with realistic intrabar movement
+    high_spread = abs(np.random.normal(0, 0.0002, num_bars))
+    low_spread = abs(np.random.normal(0, 0.0002, num_bars))
+    
     df = pd.DataFrame({
         'open': prices,
-        'high': prices * (1 + abs(np.random.normal(0, 0.0002, num_bars))),
-        'low': prices * (1 - abs(np.random.normal(0, 0.0002, num_bars))),
+        'high': prices * (1 + high_spread),
+        'low': prices * (1 - low_spread),
         'close': prices * (1 + np.random.normal(0, 0.0001, num_bars)),
         'volume': np.random.randint(100, 1000, num_bars)
     }, index=dates)
     
-    # Calculate base indicators
+    # Calculate base indicators (RSI, MACD, Bollinger Bands, ATR, etc.)
     df = calculate_base_indicators(df)
     
     return df
@@ -742,36 +750,37 @@ def cmd_quick(args, config):
     start_time = datetime.now()
     
     # Override config for quick test
+    # These minimal settings are optimized for ~2 minute validation run
     quick_config = {
         'data': {
             'pairs': [],  # Empty = use sample data
         },
         'analysis': {
-            'intervals': [1],
-            'lookbacks': [10],
+            'intervals': [1],  # M1 timeframe only
+            'lookbacks': [10],  # Minimal lookback period
         },
         'labeling': {
-            'target_pips': [10],
-            'stop_pips': [10],
-            'horizons': [60],
+            'target_pips': [10],  # Single target: 10 pips
+            'stop_pips': [10],    # Single stop: 10 pips
+            'horizons': [60],     # Single horizon: 60 minutes (1 hour)
             'use_numba': True,
         },
         'backtest': {
-            'lookbacks': [10],
-            'risk_levels': [3.0, 5.0, 7.0],
-            'initial_balance': 200,
+            'lookbacks': [10],              # Single lookback period
+            'risk_levels': [3.0, 5.0, 7.0], # Three risk levels for quick testing
+            'initial_balance': 200,          # Standard initial balance
         },
         'regime': {
-            'n_regimes': 0,  # Disabled
+            'n_regimes': 0,  # Disabled for speed
         },
         'pattern_mining': {
-            'enabled': False,
+            'enabled': False,  # Disabled for speed
         },
         'thermal': {
-            'enabled': False,
+            'enabled': False,  # Not needed for quick test
         },
         'batch': {
-            'enabled': False,
+            'enabled': False,  # Not needed for quick test
         },
         'strategies': config.get('strategies', {}),
         'ranking': config.get('ranking', {}),
@@ -779,10 +788,11 @@ def cmd_quick(args, config):
     
     # Step 1: Create sample universe
     print(f"📥 Creating sample universe...")
-    # Use existing sample data creation or create minimal dataset
+    # Use 1 day of M1 data (1440 bars) for quick validation
+    num_sample_bars = 1440
     year, month = 2026, 1  # Default for quick test
-    universe = create_sample_universe(1440)  # 1 day of M1 data
-    print(f"   ✅ Created sample universe: 1,440 bars")
+    universe = create_sample_universe(num_sample_bars)
+    print(f"   ✅ Created sample universe: {num_sample_bars:,} bars")
     
     # Step 2: Discover strategies
     print(f"🎨 Discovering strategies...")
@@ -804,6 +814,9 @@ def cmd_quick(args, config):
     print(f"🔬 Running backtest...")
     output_dir = Path("results/quick_test")
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    if not labels_dict:
+        raise RuntimeError("Failed to create labels. Cannot proceed with backtest.")
     
     first_config = list(labels_dict.keys())[0]
     labels = labels_dict[first_config]
@@ -885,20 +898,21 @@ def cmd_vast(args, config):
     print(f"   - All 22 risk levels")
     print()
     
-    # Override config for Vast.ai
-    config['thermal']['enabled'] = False
-    config['batch']['enabled'] = False
+    # Override config for Vast.ai (make a copy to avoid side effects)
+    import copy
+    vast_config = copy.deepcopy(config)
+    vast_config.setdefault('thermal', {})['enabled'] = False
+    vast_config.setdefault('batch', {})['enabled'] = False
     
     # Add parallelization settings
-    config['parallel'] = {
+    vast_config['parallel'] = {
         'enabled': True,
         'n_jobs': 120,  # Use 120 of 128 cores
     }
     
     # Call the full workflow with modified config
     # (reuse cmd_full logic but with vast optimizations)
-    args.date = f"{year}-{month:02d}"
-    cmd_full(args, config)
+    cmd_full(args, vast_config)
 
 
 def main():
