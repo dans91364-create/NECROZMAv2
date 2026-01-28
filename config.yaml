@@ -58,6 +58,20 @@ backtest:
   risk_levels: [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5, 12.0, 12.5]
   initial_balance: 200
 
+batch:
+  enabled: true
+  batch_size: 200
+  use_subprocess: false  # true for full isolation, false for in-process
+  
+thermal:
+  enabled: true
+  batch_interval: 5        # Cool every N batches
+  batch_cool_duration: 30  # Seconds
+  universe_interval: 3     # Cool every N universes
+  universe_cool_duration: 60  # Seconds
+  cpu_threshold: 80.0      # Emergency cooling if CPU > this
+  cool_target: 40.0        # Resume early if CPU < this
+
 regime:
   n_regimes: 4
   method: "hdbscan"  # or "kmeans"

@@ -24,6 +24,8 @@ from core.regime_detector import RegimeDetector
 from core.pattern_miner import PatternMiner
 from core.light_finder import LightFinder
 from core.light_report import LightReport
+from core.batch_runner import BatchRunner
+from core.thermal_manager import ThermalManager
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -228,6 +230,24 @@ def cmd_full(args, config):
     
     start_time = datetime.now()
     
+    # Initialize thermal manager
+    thermal_config = config.get('thermal', {})
+    thermal_enabled = thermal_config.get('enabled', False)
+    thermal = None
+    if thermal_enabled:
+        thermal = ThermalManager(
+            batch_interval=thermal_config.get('batch_interval', 5),
+            batch_cool_duration=thermal_config.get('batch_cool_duration', 30),
+            universe_interval=thermal_config.get('universe_interval', 3),
+            universe_cool_duration=thermal_config.get('universe_cool_duration', 60),
+            cpu_threshold=thermal_config.get('cpu_threshold', 80.0),
+            cool_target=thermal_config.get('cool_target', 40.0)
+        )
+        print(f"🌡️  Thermal management enabled:")
+        print(f"   Universe cooling: every {thermal_config.get('universe_interval', 3)} universes ({thermal_config.get('universe_cool_duration', 60)}s)")
+        print(f"   CPU threshold: {thermal_config.get('cpu_threshold', 80.0)}%")
+        print(f"   Cool target: {thermal_config.get('cool_target', 40.0)}%\n")
+    
     # Step 1: Create Universe(s)
     if pairs and base_url:
         # Multi-pair mode
@@ -363,6 +383,10 @@ def cmd_full(args, config):
                     ranking['label_config'] = label_config
                     
                     pair_results.append(ranking)
+                
+                # Thermal check after universe
+                if thermal:
+                    thermal.check_and_cool_universe(universe_idx - 1)
             
             # Combine results for this pair
             if pair_results:
@@ -528,6 +552,10 @@ def cmd_full(args, config):
                 ranking['label_config'] = label_config
                 
                 all_results.append(ranking)
+            
+            # Thermal check after universe
+            if thermal:
+                thermal.check_and_cool_universe(universe_idx - 1)
         
         # Combine all results
         print(f"\n{'='*80}")
@@ -587,6 +615,10 @@ def cmd_full(args, config):
         total_combinations = strategies_count * num_universes * len(config['backtest']['risk_levels'])
         print(f"🐉 Tested: {strategies_count} strategies × {num_universes} universes × {len(config['backtest']['risk_levels'])} risk levels")
         print(f"   Total combinations: {total_combinations:,}")
+    
+    # Print thermal summary if enabled
+    if thermal:
+        thermal.print_summary()
     
     print(f"{'='*80}\n")
 
