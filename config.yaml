@@ -48,15 +48,17 @@ backtest:
   
 strategies:
   categories:
-    - mean_reversion
     - trend
+    - mean_reversion
     - momentum
     - volatility
     - volume
-    - smc
-    - fibonacci
-    - harmonic
-    - wyckoff
     - candlestick
     - chart_patterns
+    - fibonacci
+    - time_based
+    - multi_pair
+    - smc
+    - statistical
     - exotic
+    - risk_management

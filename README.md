@@ -1,12 +1,12 @@
 # 🐉 NECROZMAv2
 
-> *"288 estratégias entram. 13 lendários emergem. O resto vira história."*
+> *"285+ estratégias entram. 13 lendários emergem. O resto vira história."*
 
 ## 🔥 O que é?
 
 NECROZMAv2 é um sistema de trading automatizado que:
 
-- ⚡ Testa **288 estratégias** em minutos
+- ⚡ Testa **285+ estratégias** em minutos
 - 🏆 Seleciona os **13 melhores** (Lendários)
 - 🔄 Evolui **todo mês** com novos dados
 - 📱 Notifica via **Telegram**
@@ -86,7 +86,7 @@ Todo dia 1º do mês:
 
 1. 📥 `git pull` - Atualiza repositório
 2. 🚀 `python necrozma.py --full` - Roda Grande Teste
-3. 📊 Script baixa dados, converte, testa 288 estratégias
+3. 📊 Script baixa dados, converte, testa 285+ estratégias
 4. 🏆 Gera ranking das 200 contas
 5. ⚔️ Compara Bottom 5 vs Top 5 novos
 6. 🔄 Substitui fracos por campeões
@@ -99,7 +99,7 @@ Todo dia 1º do mês:
 NECROZMAv2/
 ├── necrozma.py           # Script principal
 ├── config.yaml           # Configurações
-├── strategies/           # 288 estratégias
+├── strategies/           # 285+ estratégias
 │   ├── mean_reverter.py  # 🐉 Necrozma original
 │   ├── smc_orderblock.py
 │   ├── fibonacci.py
@@ -184,7 +184,7 @@ NECROZMAv2/
 - [x] Conceito e arquitetura
 - [x] Backtest Mean Reverter (5 anos)
 - [x] Validação Janeiro 2026
-- [ ] Implementar 288 estratégias
+- [ ] Implementar 285+ estratégias
 - [ ] Sistema de ranking automático
 - [ ] Bot Telegram
 - [ ] Dashboard web
@@ -201,7 +201,7 @@ NECROZMAv2/
 
 *Mas o Trainer sabia que uma estratégia não era suficiente. Ele precisava de um exército. Um Panteão de Lendários.*
 
-*Assim nasceu o Grande Teste. Uma arena onde 288 estratégias competem. Apenas as mais fortes emergem. Apenas as mais fortes se tornam Lendárias.*
+*Assim nasceu o Grande Teste. Uma arena onde 285+ estratégias competem. Apenas as mais fortes emergem. Apenas as mais fortes se tornam Lendárias.*
 
 *Necrozma foi o primeiro. O Devorador de Luz. Aquele que transforma a escuridão do mercado em lucro.*
 
