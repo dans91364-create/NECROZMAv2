@@ -1,0 +1,22 @@
+# Data
+data/raw/*.csv
+data/parquet/*.parquet
+data/universe/*.parquet
+data/patterns/*.parquet
+*.csv
+
+# Results
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
