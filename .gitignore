@@ -8,6 +8,9 @@ data/patterns/*.parquet
 # Results
 results/
 
+# Test files
+test_download.py
+
 # Python
 __pycache__/
 *.py[cod]
