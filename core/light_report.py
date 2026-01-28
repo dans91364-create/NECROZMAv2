@@ -41,22 +41,33 @@ class LightReport:
     def save_summary_json(self, ranking: pd.DataFrame, legendaries: pd.DataFrame, 
                           filename: str = "summary_stats.json"):
         """Save summary statistics to JSON."""
-        summary = {
-            'generated_at': datetime.now().isoformat(),
-            'total_strategies': len(ranking),
-            'total_positive': int((ranking['total_return'] > 0).sum()),
-            'total_negative': int((ranking['total_return'] < 0).sum()),
-            'pct_positive': float((ranking['total_return'] > 0).sum() / len(ranking) * 100),
-            'best_return': float(ranking['total_return'].max()),
-            'worst_return': float(ranking['total_return'].min()),
-            'avg_return': float(ranking['total_return'].mean()),
-            'median_return': float(ranking['total_return'].median()),
-            'avg_sharpe': float(ranking['sharpe_ratio'].mean()),
-            'avg_sortino': float(ranking['sortino_ratio'].mean()),
-            'avg_win_rate': float(ranking['win_rate'].mean()),
-            'avg_max_drawdown': float(ranking['max_drawdown'].mean()),
-            'legendaries': legendaries.to_dict('records')
-        }
+        # Handle empty ranking
+        if len(ranking) == 0:
+            summary = {
+                'generated_at': datetime.now().isoformat(),
+                'total_strategies': 0,
+                'total_positive': 0,
+                'total_negative': 0,
+                'pct_positive': 0.0,
+                'legendaries': []
+            }
+        else:
+            summary = {
+                'generated_at': datetime.now().isoformat(),
+                'total_strategies': len(ranking),
+                'total_positive': int((ranking['total_return'] > 0).sum()),
+                'total_negative': int((ranking['total_return'] < 0).sum()),
+                'pct_positive': float((ranking['total_return'] > 0).sum() / len(ranking) * 100),
+                'best_return': float(ranking['total_return'].max()),
+                'worst_return': float(ranking['total_return'].min()),
+                'avg_return': float(ranking['total_return'].mean()),
+                'median_return': float(ranking['total_return'].median()),
+                'avg_sharpe': float(ranking['sharpe_ratio'].mean()),
+                'avg_sortino': float(ranking['sortino_ratio'].mean()),
+                'avg_win_rate': float(ranking['win_rate'].mean()),
+                'avg_max_drawdown': float(ranking['max_drawdown'].mean()),
+                'legendaries': legendaries.to_dict('records')
+            }
         
         path = self.output_dir / filename
         with open(path, 'w') as f:
@@ -68,6 +79,20 @@ class LightReport:
                             filename: str = "light_report.txt") -> str:
         """Generate text report."""
         lines = []
+        
+        # Handle empty ranking
+        if len(ranking) == 0:
+            lines.append("=" * 80)
+            lines.append("🐉 NECROZMAv2 - GRANDE TESTE REPORT")
+            lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            lines.append("=" * 80)
+            lines.append("\n⚠️  No strategies to report\n")
+            lines.append("=" * 80)
+            report_text = "\n".join(lines)
+            path = self.output_dir / filename
+            with open(path, 'w') as f:
+                f.write(report_text)
+            return report_text
         
         # Header
         lines.append("=" * 80)

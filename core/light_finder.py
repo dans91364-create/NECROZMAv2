@@ -77,8 +77,9 @@ class LightFinder:
         gross_profit = sum(t['profit'] for t in trades if t['profit'] > 0)
         gross_loss = abs(sum(t['profit'] for t in trades if t['profit'] < 0))
         if gross_loss == 0:
-            return float('inf') if gross_profit > 0 else 0.0
-        return gross_profit / gross_loss
+            # Cap at 10 instead of infinity for better normalization
+            return 10.0 if gross_profit > 0 else 0.0
+        return min(gross_profit / gross_loss, 10.0)  # Cap at 10
     
     def calculate_expectancy(self, trades: List[Dict]) -> float:
         """Calculate Expectancy (average profit per trade)."""
@@ -92,13 +93,21 @@ class LightFinder:
         returns = equity_curve.pct_change().dropna()
         trades = result.get('trades', [])
         
+        # Only calculate ratio metrics if we have sufficient data
+        if len(returns) >= 2:
+            sharpe = self.calculate_sharpe_ratio(returns)
+            sortino = self.calculate_sortino_ratio(returns)
+        else:
+            sharpe = 0.0
+            sortino = 0.0
+        
         metrics = {
             'total_return': result.get('total_return', 0.0),
             'num_trades': result.get('num_trades', 0),
             'win_rate': result.get('win_rate', 0.0),
             'max_drawdown': abs(result.get('max_drawdown', 0.0)),
-            'sharpe_ratio': self.calculate_sharpe_ratio(returns),
-            'sortino_ratio': self.calculate_sortino_ratio(returns),
+            'sharpe_ratio': sharpe,
+            'sortino_ratio': sortino,
             'calmar_ratio': self.calculate_calmar_ratio(
                 result.get('total_return', 0.0),
                 result.get('max_drawdown', 0.0)
@@ -165,6 +174,11 @@ class LightFinder:
             metrics = self.calculate_all_metrics(result)
             metrics['strategy'] = strategy_name
             metrics['risk_level'] = risk_level
+            
+            # Preserve metadata if present in result
+            for metadata_key in ['pair', 'universe_name', 'interval', 'lookback', 'label_config']:
+                if metadata_key in result:
+                    metrics[metadata_key] = result[metadata_key]
             
             # Calculate composite score
             metrics['composite_score'] = self.calculate_composite_score(metrics)

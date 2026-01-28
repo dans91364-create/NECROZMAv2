@@ -9,6 +9,7 @@ Tests 285+ strategies across multiple lookback periods and risk levels.
 import argparse
 import sys
 import yaml
+import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
@@ -345,10 +346,15 @@ def cmd_full(args, config):
                         return_full_results=True
                     )
                     
-                    # Store backtest results for multi-objective ranking
+                    # Store backtest results with metadata for multi-objective ranking
                     for key, result in backtest_results.items():
-                        full_key = f"{pair}_{universe_name}_{label_config}_{key}"
-                        pair_backtest_results[full_key] = result
+                        # Add metadata to result dict instead of modifying key
+                        result['pair'] = pair
+                        result['universe_name'] = universe_name
+                        result['interval'] = interval
+                        result['lookback'] = lookback
+                        result['label_config'] = label_config
+                        pair_backtest_results[key] = result
                     
                     # Add pair, interval, lookback, and label_config info to ranking
                     ranking['pair'] = pair
@@ -371,7 +377,6 @@ def cmd_full(args, config):
         print(f"📊 COMBINING RESULTS FROM ALL PAIRS AND UNIVERSES")
         print(f"{'='*80}\n")
         
-        import pandas as pd
         combined = pd.concat(all_pair_results, ignore_index=True)
         combined = combined.sort_values('total_return', ascending=False).reset_index(drop=True)
         combined.insert(0, 'overall_rank', range(1, len(combined) + 1))
@@ -508,10 +513,14 @@ def cmd_full(args, config):
                     return_full_results=True
                 )
                 
-                # Store backtest results for multi-objective ranking
+                # Store backtest results with metadata for multi-objective ranking
                 for key, result in backtest_results.items():
-                    full_key = f"{universe_name}_{label_config}_{key}"
-                    all_backtest_results[full_key] = result
+                    # Add metadata to result dict instead of modifying key
+                    result['universe_name'] = universe_name
+                    result['interval'] = interval
+                    result['lookback'] = lookback
+                    result['label_config'] = label_config
+                    all_backtest_results[key] = result
                 
                 # Add interval, lookback, and label_config info to ranking
                 ranking['interval'] = interval
@@ -525,7 +534,6 @@ def cmd_full(args, config):
         print(f"📊 COMBINING RESULTS FROM ALL UNIVERSES")
         print(f"{'='*80}\n")
         
-        import pandas as pd
         combined = pd.concat(all_results, ignore_index=True)
         combined = combined.sort_values('total_return', ascending=False).reset_index(drop=True)
         combined.insert(0, 'overall_rank', range(1, len(combined) + 1))
