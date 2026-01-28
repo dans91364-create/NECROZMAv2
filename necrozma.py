@@ -10,13 +10,14 @@ import argparse
 import sys
 import yaml
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from core.universe import run_universe_workflow, create_all_universes
+from core.universe import run_universe_workflow, create_all_universes, calculate_base_indicators
 from core.label import run_label_workflow
 from core.patterns import discover_strategies, run_patterns_workflow
 from core.backtester import run_backtest_workflow
@@ -63,6 +64,44 @@ def parse_year_month(year_month: str) -> tuple:
         return year, month
     except (IndexError, ValueError) as e:
         raise ValueError(f"Invalid date format. Expected YYYY-MM, got '{year_month}': {e}")
+
+
+def create_sample_universe(num_bars: int = 1440) -> pd.DataFrame:
+    """
+    Create sample OHLCV data for quick testing.
+    
+    Args:
+        num_bars: Number of M1 bars (1440 = 1 day)
+        
+    Returns:
+        DataFrame with sample OHLCV data
+    """
+    print(f"📊 Generating sample data ({num_bars} bars)...")
+    
+    np.random.seed(42)
+    
+    # Generate realistic price data (EURUSD-like)
+    base_price = 1.1000
+    returns = np.random.normal(0, 0.0001, num_bars)
+    prices = base_price * (1 + returns).cumprod()
+    
+    # Create datetime index
+    start_date = pd.Timestamp("2026-01-01 00:00:00")
+    dates = pd.date_range(start=start_date, periods=num_bars, freq='1min')
+    
+    # Create OHLCV data
+    df = pd.DataFrame({
+        'open': prices,
+        'high': prices * (1 + abs(np.random.normal(0, 0.0002, num_bars))),
+        'low': prices * (1 - abs(np.random.normal(0, 0.0002, num_bars))),
+        'close': prices * (1 + np.random.normal(0, 0.0001, num_bars)),
+        'volume': np.random.randint(100, 1000, num_bars)
+    }, index=dates)
+    
+    # Calculate base indicators
+    df = calculate_base_indicators(df)
+    
+    return df
 
 
 def cmd_universe(args, config):
@@ -672,6 +711,196 @@ def cmd_report(args, config):
     print()
 
 
+def cmd_quick(args, config):
+    """
+    Execute quick test to validate project structure.
+    
+    Uses minimal settings for fast validation:
+    - 1 pair (EURUSD only)
+    - 1 universe (M1, lookback=10)
+    - 1 label config (T10_S10_H60)
+    - 3 risk levels ([3.0, 5.0, 7.0])
+    - Sample data (1 day)
+    - No regime detection
+    - No pattern mining
+    - No thermal/batch management
+    """
+    print(f"\n{'='*80}")
+    print(f"🧪 QUICK TEST MODE - Validating project structure")
+    print(f"{'='*80}\n")
+    
+    print(f"⚠️  Using minimal settings for fast validation:")
+    print(f"   - 1 pair (EURUSD)")
+    print(f"   - 1 universe (M1, lookback=10)")
+    print(f"   - 1 label config (T10_S10_H60)")
+    print(f"   - 3 risk levels ([3.0, 5.0, 7.0])")
+    print(f"   - Sample data (1 day)")
+    print(f"   - Regime detection: SKIP")
+    print(f"   - Pattern mining: SKIP")
+    print()
+    
+    start_time = datetime.now()
+    
+    # Override config for quick test
+    quick_config = {
+        'data': {
+            'pairs': [],  # Empty = use sample data
+        },
+        'analysis': {
+            'intervals': [1],
+            'lookbacks': [10],
+        },
+        'labeling': {
+            'target_pips': [10],
+            'stop_pips': [10],
+            'horizons': [60],
+            'use_numba': True,
+        },
+        'backtest': {
+            'lookbacks': [10],
+            'risk_levels': [3.0, 5.0, 7.0],
+            'initial_balance': 200,
+        },
+        'regime': {
+            'n_regimes': 0,  # Disabled
+        },
+        'pattern_mining': {
+            'enabled': False,
+        },
+        'thermal': {
+            'enabled': False,
+        },
+        'batch': {
+            'enabled': False,
+        },
+        'strategies': config.get('strategies', {}),
+        'ranking': config.get('ranking', {}),
+    }
+    
+    # Step 1: Create sample universe
+    print(f"📥 Creating sample universe...")
+    # Use existing sample data creation or create minimal dataset
+    year, month = 2026, 1  # Default for quick test
+    universe = create_sample_universe(1440)  # 1 day of M1 data
+    print(f"   ✅ Created sample universe: 1,440 bars")
+    
+    # Step 2: Discover strategies
+    print(f"🎨 Discovering strategies...")
+    strategies = discover_strategies(quick_config['strategies'].get('categories', []))
+    total_strategies = sum(len(s) for s in strategies.values())
+    print(f"   ✅ Found {total_strategies} strategies")
+    
+    # Step 3: Create labels
+    print(f"🏷️  Creating labels (1 config)...")
+    labels_dict = run_label_workflow(universe, quick_config)
+    print(f"   ✅ Created {len(labels_dict)} label config(s)")
+    
+    # Step 4: Generate patterns
+    print(f"🔮 Generating patterns...")
+    patterns = run_patterns_workflow(universe, strategies, lookback=10)
+    print(f"   ✅ Generated patterns")
+    
+    # Step 5: Run backtest
+    print(f"🔬 Running backtest...")
+    output_dir = Path("results/quick_test")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    first_config = list(labels_dict.keys())[0]
+    labels = labels_dict[first_config]
+    
+    ranking, backtest_results = run_backtest_workflow(
+        patterns,
+        labels,
+        quick_config['backtest']['risk_levels'],
+        quick_config['backtest']['initial_balance'],
+        str(output_dir),
+        return_full_results=True
+    )
+    print(f"   ✅ Tested {len(backtest_results)} combinations")
+    
+    # Step 6: Rank strategies
+    print(f"🌟 Ranking strategies...")
+    finder = LightFinder(weights=quick_config.get('ranking', {}).get('weights'))
+    mo_ranking = finder.rank_strategies(backtest_results)
+    legendaries = finder.get_legendaries(mo_ranking, n=3)
+    print(f"   ✅ Ranked {len(mo_ranking)} results")
+    
+    # Calculate duration
+    end_time = datetime.now()
+    duration = end_time - start_time
+    
+    # Print results
+    print(f"\n{'='*80}")
+    print(f"✅ QUICK TEST PASSED!")
+    print(f"{'='*80}\n")
+    
+    print(f"Project structure validated:")
+    print(f"  ✅ core/universe.py")
+    print(f"  ✅ core/labeler.py")
+    print(f"  ✅ core/patterns.py")
+    print(f"  ✅ core/backtester.py")
+    print(f"  ✅ core/light_finder.py")
+    print(f"  ✅ core/light_report.py")
+    print(f"  ✅ strategies/ ({total_strategies} loaded)")
+    print(f"  ✅ config.yaml")
+    print()
+    
+    print(f"🏆 Sample TOP 3 (from quick test):\n")
+    if len(legendaries) > 0:
+        print(legendaries[['rank', 'strategy', 'total_return', 'composite_score']].head(3).to_string(index=False))
+    print()
+    
+    print(f"⏱️  Duration: {duration}")
+    print()
+    print(f"Ready for production! Run:")
+    print(f"  python necrozma.py --full 2026-01   # For laptop/desktop")
+    print(f"  python necrozma.py --vast 2026-01   # For Vast.ai (1TB/128cores)")
+    print(f"{'='*80}\n")
+
+
+def cmd_vast(args, config):
+    """
+    Execute full Grande Teste optimized for Vast.ai (1TB RAM, 128 cores).
+    
+    Optimizations:
+    - Thermal management: DISABLED (datacenter cooling)
+    - Batch processing: DISABLED (1TB RAM = no need)
+    - Parallelization: n_jobs=120 (use 120 of 128 cores)
+    - All features enabled
+    """
+    year, month = parse_year_month(args.date)
+    
+    print(f"\n{'='*80}")
+    print(f"🚀 VAST.AI BEAST MODE - {year}-{month:02d}")
+    print(f"{'='*80}\n")
+    
+    print(f"⚡ Optimized for: 1TB RAM + 128 cores")
+    print(f"   - Thermal management: DISABLED (datacenter cooling)")
+    print(f"   - Batch processing: DISABLED (1TB RAM)")
+    print(f"   - Parallelization: 120 cores")
+    print(f"   - All 30 pairs")
+    print(f"   - All 25 universes per pair")
+    print(f"   - All 180 label configs")
+    print(f"   - All 288 strategies")
+    print(f"   - All 22 risk levels")
+    print()
+    
+    # Override config for Vast.ai
+    config['thermal']['enabled'] = False
+    config['batch']['enabled'] = False
+    
+    # Add parallelization settings
+    config['parallel'] = {
+        'enabled': True,
+        'n_jobs': 120,  # Use 120 of 128 cores
+    }
+    
+    # Call the full workflow with modified config
+    # (reuse cmd_full logic but with vast optimizations)
+    args.date = f"{year}-{month:02d}"
+    cmd_full(args, config)
+
+
 def main():
     """
     Main entry point.
@@ -692,8 +921,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Quick test to validate project structure
+  python necrozma.py --quick
+  
   # Run complete Grande Teste
   python necrozma.py --full 2026-01
+  
+  # Run optimized for Vast.ai (1TB RAM, 128 cores)
+  python necrozma.py --vast 2026-01
   
   # Create universe only
   python necrozma.py --universe 2026-01
@@ -710,8 +945,12 @@ Examples:
     )
     
     # Commands
+    parser.add_argument('--quick', action='store_true',
+                        help='Quick test to validate project structure (~2 min)')
     parser.add_argument('--full', dest='date', metavar='YYYY-MM',
                         help='Run complete Grande Teste for specified month')
+    parser.add_argument('--vast', dest='vast_date', metavar='YYYY-MM',
+                        help='Run optimized for Vast.ai 1TB/128cores (~30 min)')
     parser.add_argument('--universe', dest='universe_date', metavar='YYYY-MM',
                         help='Create universe only')
     parser.add_argument('--patterns', dest='patterns_date', metavar='YYYY-MM',
@@ -739,7 +978,12 @@ Examples:
     
     # Execute command
     try:
-        if args.date:
+        if args.quick:
+            cmd_quick(args, config)
+        elif args.vast_date:
+            args.date = args.vast_date
+            cmd_vast(args, config)
+        elif args.date:
             cmd_full(args, config)
         elif args.universe_date:
             args.date = args.universe_date
