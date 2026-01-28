@@ -248,9 +248,16 @@ def cmd_full(args, config):
             for universe_idx, (universe_name, universe_df) in enumerate(universes.items(), 1):
                 # Parse interval and lookback from universe name
                 # Format: "universe_{interval}m_{lookback}lb"
-                parts = universe_name.split('_')
-                interval = int(parts[1].replace('m', ''))
-                lookback = int(parts[2].replace('lb', ''))
+                try:
+                    parts = universe_name.split('_')
+                    if len(parts) != 3:
+                        raise ValueError(f"Unexpected universe name format: {universe_name}")
+                    interval = int(parts[1].replace('m', ''))
+                    lookback = int(parts[2].replace('lb', ''))
+                except (ValueError, IndexError) as e:
+                    print(f"⚠️  Warning: Could not parse universe name '{universe_name}': {e}")
+                    print(f"    Skipping this universe.")
+                    continue
                 
                 print(f"\n{'─'*60}")
                 print(f"📊 {pair} - Universe {universe_idx}/{len(universes)}: {interval}m, lookback={lookback}")
@@ -327,9 +334,16 @@ def cmd_full(args, config):
         for universe_idx, (universe_name, universe_df) in enumerate(universes.items(), 1):
             # Parse interval and lookback from universe name
             # Format: "universe_{interval}m_{lookback}lb"
-            parts = universe_name.split('_')
-            interval = int(parts[1].replace('m', ''))
-            lookback = int(parts[2].replace('lb', ''))
+            try:
+                parts = universe_name.split('_')
+                if len(parts) != 3:
+                    raise ValueError(f"Unexpected universe name format: {universe_name}")
+                interval = int(parts[1].replace('m', ''))
+                lookback = int(parts[2].replace('lb', ''))
+            except (ValueError, IndexError) as e:
+                print(f"⚠️  Warning: Could not parse universe name '{universe_name}': {e}")
+                print(f"    Skipping this universe.")
+                continue
             
             print(f"\n{'─'*60}")
             print(f"📊 Universe {universe_idx}/{len(universes)}: {interval}m, lookback={lookback}")
