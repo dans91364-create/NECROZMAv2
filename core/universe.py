@@ -391,6 +391,78 @@ def calculate_base_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def resample_to_timeframe(df: pd.DataFrame, interval_minutes: int) -> pd.DataFrame:
+    """
+    Resample M1 data to higher timeframe.
+    
+    Args:
+        df: DataFrame with M1 data (must have datetime index and OHLCV columns)
+        interval_minutes: Interval in minutes (1, 5, 15, 30, 60)
+        
+    Returns:
+        Resampled DataFrame with OHLCV columns only (indicators are dropped)
+        
+    Note:
+        Only OHLCV columns are preserved during resampling.
+        Indicator columns (if present) are dropped and should be recalculated.
+    """
+    # Validate interval
+    valid_intervals = [1, 5, 15, 30, 60]
+    if interval_minutes not in valid_intervals:
+        raise ValueError(f"Invalid interval_minutes: {interval_minutes}. Must be one of {valid_intervals}")
+    
+    if interval_minutes == 1:
+        # Return only OHLCV columns even for M1
+        return df[['open', 'high', 'low', 'close', 'volume']].copy()
+    
+    # Resample OHLCV
+    resampled = df[['open', 'high', 'low', 'close', 'volume']].resample(f'{interval_minutes}min').agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum'
+    }).dropna()
+    
+    return resampled
+
+
+def create_all_universes(pair_data: pd.DataFrame, intervals: List[int], lookbacks: List[int]) -> Dict[str, pd.DataFrame]:
+    """
+    Create universes for all interval × lookback combinations.
+    
+    Args:
+        pair_data: DataFrame M1 for a pair (with datetime index and OHLCV columns)
+        intervals: List of intervals [1, 5, 15, 30, 60]
+        lookbacks: List of lookbacks [5, 10, 15, 20, 30]
+        
+    Returns:
+        Dict mapping "universe_{interval}m_{lookback}lb" -> DataFrame
+        
+    Note:
+        The lookback parameter is included in the naming for compatibility with 
+        downstream processing, but all universes for a given interval share the 
+        same data (indicators are calculated once per interval).
+    """
+    universes = {}
+    
+    for interval in intervals:
+        # Resample to the timeframe (returns only OHLCV)
+        resampled = resample_to_timeframe(pair_data, interval)
+        
+        # Calculate indicators once per interval
+        with_indicators = calculate_base_indicators(resampled)
+        
+        # Create references for each lookback combination
+        # Note: All lookbacks for the same interval share the same data
+        for lookback in lookbacks:
+            universe_name = f"universe_{interval}m_{lookback}lb"
+            # Store reference to the same DataFrame (memory efficient)
+            universes[universe_name] = with_indicators
+    
+    return universes
+
+
 def run_universe_workflow(year: int, month: int, pairs: Optional[List[str]] = None, 
                           base_url: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     """
