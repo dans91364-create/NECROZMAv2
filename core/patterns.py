@@ -79,14 +79,23 @@ def generate_all_patterns(universe: pd.DataFrame, strategies: Dict[str, List[Any
     for category, strategy_list in strategies.items():
         for strategy_class in strategy_list:
             try:
-                # Instantiate strategy
-                strategy = strategy_class(lookback=lookback)
+                # Try v1-style instantiation first (params: Dict)
+                # v1 strategies use Dict params, v2 uses lookback: int
+                try:
+                    # v1 style: __init__(params: Dict)
+                    params = {"lookback": lookback, "period": lookback}
+                    strategy = strategy_class(params)
+                    strategy_name = strategy.name
+                except TypeError:
+                    # v2 style: __init__(lookback: int)
+                    strategy = strategy_class(lookback=lookback)
+                    strategy_name = strategy.name
                 
                 # Generate signals
                 signals = strategy.generate_signals(patterns)
                 
                 # Add to patterns
-                column_name = f"signal_{strategy.name.lower()}"
+                column_name = f"signal_{strategy_name.lower()}"
                 patterns[column_name] = signals
                 
                 strategy_count += 1

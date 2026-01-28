@@ -1,24 +1,18 @@
-"""
-Renko Strategy
-
-Placeholder for exotic strategy.
-"""
-
+"""Exotic Chart and Order Flow Strategies"""
 import pandas as pd
-import numpy as np
-from strategies.base import BaseStrategy
+from typing import Dict
+from strategies.base import Strategy
 
+class RenkoStrategy(Strategy):
+    """Renko Charts"""
+    def __init__(self, params: Dict):
+        super().__init__("RenkoStrategy", params)
+        self.threshold = params.get("threshold", 0.5)
+        self.rules = [{"type": "entry_long", "condition": "brick-based charting bullish"}, {"type": "entry_short", "condition": "brick-based charting bearish"}]
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
+        # Simplified: use price momentum as proxy
+        momentum = price.pct_change(5)
+        signals[momentum > self.threshold], signals[momentum < -self.threshold] = 1, -1
+        return signals
 
-class Renko(BaseStrategy):
-    """
-    Renko strategy implementation.
-    """
-
-    def create_patterns(self, universe: pd.DataFrame) -> pd.DataFrame:
-        """Create patterns from universe."""
-        return universe.copy()
-
-    def generate_signals(self, patterns: pd.DataFrame) -> pd.Series:
-        """Generate trading signals."""
-        # Placeholder: Always return no signal
-        return pd.Series(0, index=patterns.index)

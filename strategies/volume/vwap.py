@@ -1,24 +1,27 @@
-"""
-Vwap Strategy
-
-Placeholder for volume strategy.
-"""
-
+"""VWAP Strategies"""
 import pandas as pd
-import numpy as np
-from strategies.base import BaseStrategy
-
-
-class Vwap(BaseStrategy):
-    """
-    Vwap strategy implementation.
-    """
-
-    def create_patterns(self, universe: pd.DataFrame) -> pd.DataFrame:
-        """Create patterns from universe."""
-        return universe.copy()
-
-    def generate_signals(self, patterns: pd.DataFrame) -> pd.Series:
-        """Generate trading signals."""
-        # Placeholder: Always return no signal
-        return pd.Series(0, index=patterns.index)
+from typing import Dict
+from strategies.base import Strategy, EPSILON
+class VWAPStrategy(Strategy):
+    def __init__(self, params: Dict):
+        super().__init__("VWAPStrategy", params)
+        self.rules = [{"type": "entry_long", "condition": "price crosses above VWAP"}, {"type": "entry_short", "condition": "price crosses below VWAP"}]
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
+        if "volume" in df.columns:
+            vwap = (price * df["volume"]).cumsum() / (df["volume"].cumsum() + EPSILON)
+            signals[(price > vwap) & (price.shift(1) <= vwap.shift(1))], signals[(price < vwap) & (price.shift(1) >= vwap.shift(1))] = 1, -1
+        return signals
+class VWAPBreakout(Strategy):
+    def __init__(self, params: Dict):
+        super().__init__("VWAPBreakout", params)
+        self.std_mult = params.get("std_mult", 2.0)
+        self.rules = [{"type": "entry_long", "condition": "price > VWAP + 2*std"}, {"type": "entry_short", "condition": "price < VWAP - 2*std"}]
+    def generate_signals(self, df: pd.DataFrame) -> pd.Series:
+        signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
+        if "volume" in df.columns:
+            vwap = (price * df["volume"]).cumsum() / (df["volume"].cumsum() + EPSILON)
+            vwap_std = ((price - vwap) ** 2 * df["volume"]).cumsum() / (df["volume"].cumsum() + EPSILON)
+            vwap_std = vwap_std ** 0.5
+            signals[price > vwap + self.std_mult * vwap_std], signals[price < vwap - self.std_mult * vwap_std] = 1, -1
+        return signals
