@@ -150,6 +150,11 @@ class PatternMiner:
             # Convert to binary: positive (1) vs non-positive (0)
             y = (y > 0).astype(int)
         
+        # Check if we have at least two classes
+        if y.nunique() < 2:
+            print("   ⚠️  Warning: Target has only one class. Cannot train classification models.")
+            return None, None
+        
         return X, y
     
     def _train_models(self, X: pd.DataFrame, y: pd.Series) -> Dict:
@@ -376,7 +381,7 @@ class PatternMiner:
         # Extract patterns from top features
         top_10 = importance_df.head(10)
         
-        for idx, row in top_10.iterrows():
+        for rank, (idx, row) in enumerate(top_10.iterrows(), start=1):
             feature = row['feature']
             importance = row['importance']
             
@@ -385,7 +390,9 @@ class PatternMiner:
                 
                 # Calculate correlation with target
                 if len(feature_values) > 0 and len(y) > 0:
-                    correlation = np.corrcoef(feature_values, y)[0, 1]
+                    # Align indices before correlation
+                    aligned_features = feature_values.loc[y.index]
+                    correlation = np.corrcoef(aligned_features, y)[0, 1]
                 else:
                     correlation = 0.0
                 
@@ -394,7 +401,7 @@ class PatternMiner:
                     'correlation': float(correlation),
                     'mean': float(feature_values.mean()),
                     'std': float(feature_values.std()),
-                    'rank': int(idx) + 1
+                    'rank': rank
                 }
         
         return patterns

@@ -11,7 +11,6 @@ import pandas as pd
 from typing import Dict, List, Optional
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
 
 try:
     import hdbscan
@@ -68,13 +67,13 @@ class RegimeDetector:
         
         # Use ATR if available, otherwise calculate it
         if 'atr_14' in df.columns:
-            features['atr_norm'] = df['atr_14'] / df['close']
+            features['atr_norm'] = df['atr_14'] / (df['close'] + 1e-8)
         else:
             # Calculate simple ATR approximation
             if 'high' in df.columns and 'low' in df.columns:
-                features['atr_norm'] = (df['high'] - df['low']).rolling(14).mean() / df['close']
+                features['atr_norm'] = (df['high'] - df['low']).rolling(14).mean() / (df['close'] + 1e-8)
             else:
-                features['atr_norm'] = df['close'].rolling(14).std() / df['close']
+                features['atr_norm'] = df['close'].rolling(14).std() / (df['close'] + 1e-8)
         
         # Trend features
         sma_20 = df['close'].rolling(20).mean()
@@ -84,7 +83,7 @@ class RegimeDetector:
         
         # Range features
         if 'high' in df.columns and 'low' in df.columns:
-            features['range_pct'] = (df['high'] - df['low']) / df['close']
+            features['range_pct'] = (df['high'] - df['low']) / (df['close'] + 1e-8)
         else:
             # Approximate range from volatility
             features['range_pct'] = features['volatility'] * 2
@@ -128,11 +127,18 @@ class RegimeDetector:
                     # Assign noise to most common cluster
                     most_common = pd.Series(valid_labels).mode()[0]
                     labels[noise_mask] = most_common
+                else:
+                    # All points are noise - assign all to cluster 0
+                    print("   ⚠️  Warning: HDBSCAN classified all points as noise. Assigning to cluster 0.")
+                    labels[:] = 0
             
             self.model = clusterer
             
         else:
             # Use KMeans as fallback
+            if self.method == "hdbscan" and not HDBSCAN_AVAILABLE:
+                print("   ⚠️  Warning: HDBSCAN not available, using KMeans instead.")
+            
             kmeans = KMeans(
                 n_clusters=self.n_regimes,
                 random_state=42,

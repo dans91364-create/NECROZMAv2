@@ -314,8 +314,8 @@ def cmd_full(args, config):
                         importance = miner.get_feature_importance()
                         if len(importance) > 0:
                             print(f"   Top 10 important features:")
-                            for idx, row in importance.head(10).iterrows():
-                                print(f"   {idx+1}. {row['feature']}: {row['importance']:.4f}")
+                            for rank, (idx, row) in enumerate(importance.head(10).iterrows(), start=1):
+                                print(f"   {rank}. {row['feature']}: {row['importance']:.4f}")
                             
                             # Save patterns
                             patterns_output_dir = Path(f"results/{year}-{month:02d}/{pair}/{universe_name}")
@@ -452,8 +452,8 @@ def cmd_full(args, config):
                     importance = miner.get_feature_importance()
                     if len(importance) > 0:
                         print(f"   Top 10 important features:")
-                        for idx, row in importance.head(10).iterrows():
-                            print(f"   {idx+1}. {row['feature']}: {row['importance']:.4f}")
+                        for rank, (idx, row) in enumerate(importance.head(10).iterrows(), start=1):
+                            print(f"   {rank}. {row['feature']}: {row['importance']:.4f}")
                         
                         # Save patterns
                         patterns_output_dir = Path(f"results/{year}-{month:02d}/{universe_name}")
