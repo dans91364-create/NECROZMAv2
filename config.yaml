@@ -40,6 +40,10 @@ data:
     - USDSEK
     # Index (1)
     - DXY
+
+analysis:
+  intervals: [1, 5, 15, 30, 60]  # Timeframes em minutos
+  lookbacks: [5, 10, 15, 20, 30]  # Períodos de lookback
   
 backtest:
   lookbacks: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]

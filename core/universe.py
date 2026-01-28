@@ -391,6 +391,60 @@ def calculate_base_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def resample_to_timeframe(df: pd.DataFrame, interval_minutes: int) -> pd.DataFrame:
+    """
+    Resample M1 data to higher timeframe.
+    
+    Args:
+        df: DataFrame with M1 data (must have datetime index)
+        interval_minutes: Interval in minutes (1, 5, 15, 30, 60)
+        
+    Returns:
+        Resampled DataFrame
+    """
+    if interval_minutes == 1:
+        return df
+    
+    # Resample OHLCV
+    resampled = df.resample(f'{interval_minutes}min').agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum'
+    }).dropna()
+    
+    return resampled
+
+
+def create_all_universes(pair_data: pd.DataFrame, intervals: List[int], lookbacks: List[int]) -> Dict[str, pd.DataFrame]:
+    """
+    Create universes for all interval × lookback combinations.
+    
+    Args:
+        pair_data: DataFrame M1 for a pair (with datetime index)
+        intervals: List of intervals [1, 5, 15, 30, 60]
+        lookbacks: List of lookbacks [5, 10, 15, 20, 30]
+        
+    Returns:
+        Dict mapping "universe_{interval}m_{lookback}lb" -> DataFrame
+    """
+    universes = {}
+    
+    for interval in intervals:
+        # Resample to the timeframe
+        resampled = resample_to_timeframe(pair_data, interval)
+        
+        # Calculate indicators
+        with_indicators = calculate_base_indicators(resampled)
+        
+        for lookback in lookbacks:
+            universe_name = f"universe_{interval}m_{lookback}lb"
+            universes[universe_name] = with_indicators.copy()
+    
+    return universes
+
+
 def run_universe_workflow(year: int, month: int, pairs: Optional[List[str]] = None, 
                           base_url: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     """
