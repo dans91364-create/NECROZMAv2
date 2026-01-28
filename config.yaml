@@ -1,7 +1,45 @@
 data:
   source: exness
   symbol: XAUUSD
-  timeframe: M1
+  timeframe: tick
+  base_url: "https://ticks.ex2archive.com/ticks/{pair}_Standart_Plus/{year}/{month:02d}/Exness_{pair}_Standart_Plus_{year}_{month:02d}.zip"
+  pairs:
+    # Majors (7)
+    - EURUSD
+    - GBPUSD
+    - USDJPY
+    - USDCHF
+    - USDCAD
+    - AUDUSD
+    - NZDUSD
+    # Crosses (10)
+    - EURJPY
+    - EURGBP
+    - GBPJPY
+    - AUDJPY
+    - NZDJPY
+    - CADJPY
+    - CHFJPY
+    - EURAUD
+    - GBPAUD
+    - EURCHF
+    # Precious Metals (4)
+    - XAUUSD
+    - XAGUSD
+    - XPTUSD
+    - XPDUSD
+    # Industrial Metals (3)
+    - XCUUSD
+    - XALUSD
+    - XNIUSD
+    # Exotics (5)
+    - USDMXN
+    - USDZAR
+    - USDTRY
+    - EURNOK
+    - USDSEK
+    # Index (1)
+    - DXY
   
 backtest:
   lookbacks: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]

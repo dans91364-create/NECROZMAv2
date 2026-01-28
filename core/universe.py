@@ -2,8 +2,8 @@
 Universe Creation Module - CREATE UNIVERSE
 
 This module handles:
-- Downloading XAUUSD M1 data from broker
-- Converting CSV to Parquet format
+- Downloading tick data from Exness for multiple pairs
+- Converting ZIP → CSV → Parquet format
 - Creating standardized DataFrame
 - Calculating base indicators
 """
@@ -12,9 +12,163 @@ import os
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict
 import requests
 from tqdm import tqdm
+import zipfile
+import tempfile
+
+
+def download_with_progress(url: str, output_path: Path) -> None:
+    """
+    Download file with progress bar.
+    
+    Args:
+        url: URL to download from
+        output_path: Path to save downloaded file
+    """
+    response = requests.get(url, stream=True)
+    response.raise_for_status()
+    
+    total_size = int(response.headers.get('content-length', 0))
+    
+    with open(output_path, 'wb') as f:
+        with tqdm(total=total_size, unit='B', unit_scale=True, desc=f"Downloading") as pbar:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+
+
+def extract_csv_from_zip(zip_path: Path) -> Path:
+    """
+    Extract CSV file from ZIP archive.
+    
+    Args:
+        zip_path: Path to ZIP file
+        
+    Returns:
+        Path to extracted CSV file
+    """
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        # Get the first CSV file in the archive
+        csv_files = [f for f in zip_ref.namelist() if f.endswith('.csv')]
+        if not csv_files:
+            raise ValueError(f"No CSV file found in {zip_path}")
+        
+        csv_filename = csv_files[0]
+        extract_dir = zip_path.parent
+        zip_ref.extract(csv_filename, extract_dir)
+        
+        return extract_dir / csv_filename
+
+
+def download_pair(pair: str, year: int, month: int, base_url: str, output_dir: Path) -> Optional[Path]:
+    """
+    Download tick data for a single pair/month from Exness.
+    
+    Args:
+        pair: Currency pair (e.g., 'EURUSD')
+        year: Year (e.g., 2026)
+        month: Month (1-12)
+        base_url: URL template for downloads
+        output_dir: Directory to save parquet files
+        
+    Returns:
+        Path to parquet file, or None if download failed
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_parquet = output_dir / f"{pair}_{year}_{month:02d}.parquet"
+    
+    # Skip if already exists
+    if output_parquet.exists():
+        print(f"⏭️  {pair} já existe, pulando...")
+        return output_parquet
+    
+    try:
+        # Build URL
+        url = base_url.format(pair=pair, year=year, month=month)
+        
+        # Create temp directory for download
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            zip_file = temp_path / f"{pair}_{year}_{month:02d}.zip"
+            
+            # Download ZIP
+            print(f"📥 Downloading {pair}...")
+            download_with_progress(url, zip_file)
+            
+            # Extract CSV
+            csv_file = extract_csv_from_zip(zip_file)
+            
+            # Read and validate
+            df = pd.read_csv(
+                csv_file,
+                skiprows=1,
+                names=['broker', 'symbol', 'timestamp', 'bid', 'ask'],
+                parse_dates=['timestamp']
+            )
+            
+            # Convert to standardized format
+            # Create OHLC from bid/ask tick data
+            df['mid'] = (df['bid'] + df['ask']) / 2
+            df.set_index('timestamp', inplace=True)
+            
+            # Resample to M1 bars for compatibility with existing system
+            ohlc = df['mid'].resample('1min').ohlc()
+            ohlc.columns = ['open', 'high', 'low', 'close']
+            ohlc['volume'] = df['mid'].resample('1min').count()
+            
+            # Remove rows with no data
+            ohlc = ohlc.dropna()
+            
+            # Reset index to have datetime as column
+            ohlc.reset_index(inplace=True)
+            ohlc.rename(columns={'timestamp': 'DateTime'}, inplace=True)
+            
+            # Convert to Parquet
+            ohlc.to_parquet(output_parquet, engine='pyarrow', compression='snappy')
+            
+            file_size = output_parquet.stat().st_size / 1024 / 1024  # MB
+            num_ticks = len(df)
+            print(f"✅ {pair}: {file_size:.1f}MB, {num_ticks/1000000:.1f}M ticks")
+            
+            return output_parquet
+            
+    except Exception as e:
+        print(f"❌ Error downloading {pair}: {e}")
+        return None
+
+
+def download_all_pairs(pairs: List[str], year: int, month: int, base_url: str, output_dir: Path) -> Dict[str, Path]:
+    """
+    Download tick data for all pairs.
+    
+    Args:
+        pairs: List of currency pairs
+        year: Year
+        month: Month
+        base_url: URL template for downloads
+        output_dir: Directory to save parquet files
+        
+    Returns:
+        Dictionary mapping pair to parquet file path
+    """
+    print(f"\n{'='*80}")
+    print(f"📥 STEP 1: DOWNLOADING {len(pairs)} PAIRS")
+    print(f"{'='*80}\n")
+    
+    results = {}
+    
+    for i, pair in enumerate(pairs, 1):
+        print(f"[{i}/{len(pairs)}] {pair}...")
+        parquet_path = download_pair(pair, year, month, base_url, output_dir)
+        if parquet_path:
+            results[pair] = parquet_path
+    
+    print(f"\n✅ Downloaded {len(results)}/{len(pairs)} pairs successfully\n")
+    
+    return results
 
 
 def download_data(year: int, month: int, output_dir: str = "data/raw") -> str:
@@ -237,35 +391,82 @@ def calculate_base_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def run_universe_workflow(year: int, month: int) -> pd.DataFrame:
+def run_universe_workflow(year: int, month: int, pairs: Optional[List[str]] = None, 
+                          base_url: Optional[str] = None) -> Dict[str, pd.DataFrame]:
     """
-    Run complete universe creation workflow.
+    Run complete universe creation workflow for multiple pairs.
     
     Args:
         year: Year
         month: Month
+        pairs: List of currency pairs (if None, uses single pair mode)
+        base_url: URL template for downloads (required for multi-pair mode)
         
     Returns:
-        Universe DataFrame with indicators
+        Dictionary mapping pair to universe DataFrame, or single DataFrame for single pair mode
     """
-    print(f"\n{'='*60}")
-    print(f"🌌 UNIVERSE CREATION - {year}-{month:02d}")
-    print(f"{'='*60}\n")
+    # Single pair mode (backward compatibility)
+    if pairs is None or len(pairs) == 0:
+        print(f"\n{'='*60}")
+        print(f"🌌 UNIVERSE CREATION - {year}-{month:02d}")
+        print(f"{'='*60}\n")
+        
+        # Step 1: Download data
+        csv_path = download_data(year, month)
+        
+        # Step 2: Convert to Parquet
+        parquet_path = convert_to_parquet(csv_path, delete_csv=True)
+        
+        # Step 3: Create universe
+        universe = create_universe(parquet_path)
+        
+        # Step 4: Calculate indicators
+        universe = calculate_base_indicators(universe)
+        
+        print(f"\n{'='*60}")
+        print(f"✅ UNIVERSE CREATED - {len(universe)} bars with {len(universe.columns)} features")
+        print(f"{'='*60}\n")
+        
+        return universe
     
-    # Step 1: Download data
-    csv_path = download_data(year, month)
+    # Multi-pair mode
+    print(f"\n{'='*80}")
+    print(f"🌌 MULTI-PAIR UNIVERSE CREATION - {year}-{month:02d}")
+    print(f"{'='*80}\n")
     
-    # Step 2: Convert to Parquet
-    parquet_path = convert_to_parquet(csv_path, delete_csv=True)
+    if base_url is None:
+        raise ValueError("base_url is required for multi-pair mode")
     
-    # Step 3: Create universe
-    universe = create_universe(parquet_path)
+    # Step 1: Download all pairs
+    parquet_dir = Path("data/parquet")
+    pair_files = download_all_pairs(pairs, year, month, base_url, parquet_dir)
     
-    # Step 4: Calculate indicators
-    universe = calculate_base_indicators(universe)
+    # Step 2: Create universes for each pair
+    print(f"\n{'='*80}")
+    print(f"📊 STEP 2: CREATING UNIVERSES")
+    print(f"{'='*80}\n")
     
-    print(f"\n{'='*60}")
-    print(f"✅ UNIVERSE CREATED - {len(universe)} bars with {len(universe.columns)} features")
-    print(f"{'='*60}\n")
+    universes = {}
     
-    return universe
+    for i, (pair, parquet_path) in enumerate(pair_files.items(), 1):
+        try:
+            print(f"Processing {pair}... ", end='', flush=True)
+            
+            # Create universe
+            universe = create_universe(str(parquet_path))
+            
+            # Calculate indicators
+            universe = calculate_base_indicators(universe)
+            
+            universes[pair] = universe
+            print(f"✅ {len(universe)} bars created")
+            
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            continue
+    
+    print(f"\n{'='*80}")
+    print(f"✅ CREATED {len(universes)}/{len(pairs)} UNIVERSES")
+    print(f"{'='*80}\n")
+    
+    return universes
