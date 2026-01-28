@@ -75,6 +75,7 @@ def generate_all_patterns(universe: pd.DataFrame, strategies: Dict[str, List[Any
     
     patterns = universe.copy()
     strategy_count = 0
+    signal_dict = {}  # Collect signals before adding to DataFrame
     
     for category, strategy_list in strategies.items():
         for strategy_class in strategy_list:
@@ -94,14 +95,19 @@ def generate_all_patterns(universe: pd.DataFrame, strategies: Dict[str, List[Any
                 # Generate signals
                 signals = strategy.generate_signals(patterns)
                 
-                # Add to patterns
+                # Store in dict (more efficient than adding columns iteratively)
                 column_name = f"signal_{strategy_name.lower()}"
-                patterns[column_name] = signals
+                signal_dict[column_name] = signals
                 
                 strategy_count += 1
                 
             except Exception as e:
                 print(f"   ⚠️  Error in {strategy_class.__name__}: {e}")
+    
+    # Add all signals at once (much more efficient than iterative column addition)
+    if signal_dict:
+        signals_df = pd.DataFrame(signal_dict, index=patterns.index)
+        patterns = pd.concat([patterns, signals_df], axis=1)
     
     print(f"✅ Generated patterns from {strategy_count} strategies")
     

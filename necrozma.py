@@ -3,7 +3,7 @@
 🐉 NECROZMA v2 - Trading Strategy Laboratory
 
 Main CLI entry point for the Grande Teste system.
-Tests 265+ strategies across multiple lookback periods and risk levels.
+Tests 285+ strategies across multiple lookback periods and risk levels.
 """
 
 import argparse
@@ -191,13 +191,13 @@ def cmd_full(args, config):
         print(f"Multi-pair mode: Testing {len(pairs)} pairs")
         print(f"  1. Download/Create Universes for {len(pairs)} pairs")
         print(f"  2. Create Labels")
-        print(f"  3. Generate Patterns (265+ strategies)")
+        print(f"  3. Generate Patterns (285+ strategies)")
         print(f"  4. Run Backtest ({len(config['backtest']['risk_levels'])} risk levels)")
     else:
         print(f"Single-pair mode")
         print(f"  1. Download/Create Universe")
         print(f"  2. Create Labels")
-        print(f"  3. Generate Patterns (265+ strategies)")
+        print(f"  3. Generate Patterns (285+ strategies)")
         print(f"  4. Run Backtest ({len(config['backtest']['risk_levels'])} risk levels)")
     
     print(f"\n{'='*80}\n")
@@ -435,7 +435,7 @@ def main():
     ║                                                               ║
     ║   🐉 NECROZMA v2 - Trading Strategy Laboratory 🐉           ║
     ║                                                               ║
-    ║   "265 strategies enter. 13 Legendaries emerge."             ║
+    ║   "285 strategies enter. 13 Legendaries emerge."             ║
     ║                                                               ║
     ╚═══════════════════════════════════════════════════════════════╝
     """)
