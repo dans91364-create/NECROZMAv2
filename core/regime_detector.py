@@ -148,7 +148,7 @@ class RegimeDetector:
         result['regime'] = regime_series
         
         # Forward fill regime labels for missing values
-        result['regime'] = result['regime'].fillna(method='ffill').fillna(method='bfill')
+        result['regime'] = result['regime'].ffill().bfill()
         
         return result
     
