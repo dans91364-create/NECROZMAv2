@@ -182,82 +182,175 @@ def cmd_full(args, config):
     print(f"\n{'='*80}")
     print(f"🐉 GRANDE TESTE - {year}-{month:02d}")
     print(f"{'='*80}\n")
-    print(f"This will run the complete workflow:")
-    print(f"  1. Download/Create Universe")
-    print(f"  2. Create Labels")
-    print(f"  3. Generate Patterns (265+ strategies)")
-    print(f"  4. Run Backtest ({len(config['backtest']['risk_levels'])} risk levels)")
+    
+    # Check if multi-pair mode is enabled
+    pairs = config.get('data', {}).get('pairs', [])
+    base_url = config.get('data', {}).get('base_url', None)
+    
+    if pairs and base_url:
+        print(f"Multi-pair mode: Testing {len(pairs)} pairs")
+        print(f"  1. Download/Create Universes for {len(pairs)} pairs")
+        print(f"  2. Create Labels")
+        print(f"  3. Generate Patterns (265+ strategies)")
+        print(f"  4. Run Backtest ({len(config['backtest']['risk_levels'])} risk levels)")
+    else:
+        print(f"Single-pair mode")
+        print(f"  1. Download/Create Universe")
+        print(f"  2. Create Labels")
+        print(f"  3. Generate Patterns (265+ strategies)")
+        print(f"  4. Run Backtest ({len(config['backtest']['risk_levels'])} risk levels)")
+    
     print(f"\n{'='*80}\n")
     
     start_time = datetime.now()
     
-    # Step 1: Create Universe
-    universe = run_universe_workflow(year, month)
-    
-    # Save universe
-    output_dir = Path("data/universe")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    universe_path = output_dir / f"universe_{year}_{month:02d}.parquet"
-    universe.to_parquet(universe_path)
-    
-    # Step 2: Create Labels
-    labels = run_label_workflow(universe)
-    
-    # Step 3: Discover Strategies
-    strategies = discover_strategies(config['strategies']['categories'])
-    
-    # Step 4: Generate Patterns (for each lookback)
-    lookbacks = config['backtest']['lookbacks']
-    print(f"\n🔄 Testing {len(lookbacks)} lookback periods: {lookbacks}")
-    
-    all_results = []
-    
-    for lookback in lookbacks:
-        print(f"\n{'─'*60}")
-        print(f"📊 Lookback: {lookback}")
-        print(f"{'─'*60}\n")
+    # Step 1: Create Universe(s)
+    if pairs and base_url:
+        # Multi-pair mode
+        universes = run_universe_workflow(year, month, pairs=pairs, base_url=base_url)
         
-        patterns = run_patterns_workflow(universe, strategies, lookback)
+        # Process each pair
+        all_pair_results = []
         
-        # Run backtest for this lookback
-        output_dir_lookback = Path(f"results/{year}-{month:02d}/lookback_{lookback}")
-        ranking = run_backtest_workflow(
-            patterns,
-            labels,
-            config['backtest']['risk_levels'],
-            config['backtest']['initial_balance'],
-            str(output_dir_lookback)
-        )
+        for pair_idx, (pair, universe) in enumerate(universes.items(), 1):
+            print(f"\n{'='*80}")
+            print(f"🔬 PROCESSING PAIR {pair_idx}/{len(universes)}: {pair}")
+            print(f"{'='*80}\n")
+            
+            # Save universe for this pair
+            output_dir = Path(f"data/universe/{pair}")
+            output_dir.mkdir(parents=True, exist_ok=True)
+            universe_path = output_dir / f"universe_{year}_{month:02d}.parquet"
+            universe.to_parquet(universe_path)
+            
+            # Step 2: Create Labels
+            print(f"\n📊 Creating labels for {pair}...")
+            labels = run_label_workflow(universe)
+            
+            # Step 3: Discover Strategies
+            strategies = discover_strategies(config['strategies']['categories'])
+            
+            # Step 4: Test each lookback period
+            lookbacks = config['backtest']['lookbacks']
+            print(f"\n🔄 Testing {len(lookbacks)} lookback periods for {pair}")
+            
+            pair_results = []
+            
+            for lookback in lookbacks:
+                print(f"\n{'─'*60}")
+                print(f"📊 {pair} - Lookback: {lookback}")
+                print(f"{'─'*60}\n")
+                
+                patterns = run_patterns_workflow(universe, strategies, lookback)
+                
+                # Run backtest for this lookback
+                output_dir_lookback = Path(f"results/{year}-{month:02d}/{pair}/lookback_{lookback}")
+                ranking = run_backtest_workflow(
+                    patterns,
+                    labels,
+                    config['backtest']['risk_levels'],
+                    config['backtest']['initial_balance'],
+                    str(output_dir_lookback)
+                )
+                
+                # Add pair and lookback info to ranking
+                ranking['pair'] = pair
+                ranking['lookback'] = lookback
+                
+                pair_results.append(ranking)
+            
+            # Combine results for this pair
+            if pair_results:
+                pair_combined = pd.concat(pair_results, ignore_index=True)
+                all_pair_results.append(pair_combined)
         
-        all_results.append({
-            'lookback': lookback,
-            'ranking': ranking
-        })
-    
-    # Combine all results
-    print(f"\n{'='*80}")
-    print(f"📊 COMBINING RESULTS FROM ALL LOOKBACKS")
-    print(f"{'='*80}\n")
-    
-    import pandas as pd
-    all_rankings = []
-    for result in all_results:
-        df = result['ranking'].copy()
-        df['lookback'] = result['lookback']
-        all_rankings.append(df)
-    
-    combined = pd.concat(all_rankings, ignore_index=True)
-    combined = combined.sort_values('total_return', ascending=False).reset_index(drop=True)
-    combined.insert(0, 'overall_rank', range(1, len(combined) + 1))
-    
-    # Save combined ranking
-    final_output_dir = Path(f"results/{year}-{month:02d}")
-    final_ranking_path = final_output_dir / "ranking_all_lookbacks.csv"
-    combined.to_csv(final_ranking_path, index=False)
-    
-    # Show top 13 (the Legendaries)
-    print(f"🏆 TOP 13 LENDÁRIOS:\n")
-    print(combined.head(13).to_string(index=False))
+        # Combine all results from all pairs
+        print(f"\n{'='*80}")
+        print(f"📊 COMBINING RESULTS FROM ALL PAIRS AND LOOKBACKS")
+        print(f"{'='*80}\n")
+        
+        import pandas as pd
+        combined = pd.concat(all_pair_results, ignore_index=True)
+        combined = combined.sort_values('total_return', ascending=False).reset_index(drop=True)
+        combined.insert(0, 'overall_rank', range(1, len(combined) + 1))
+        
+        # Save combined ranking
+        final_output_dir = Path(f"results/{year}-{month:02d}")
+        final_ranking_path = final_output_dir / "ranking_all_pairs_lookbacks.csv"
+        combined.to_csv(final_ranking_path, index=False)
+        
+        # Show top 13 (the Legendaries)
+        print(f"🏆 TOP 13 LENDÁRIOS:\n")
+        print(combined.head(13).to_string(index=False))
+        
+    else:
+        # Single pair mode (original behavior)
+        universe = run_universe_workflow(year, month)
+        
+        # Save universe
+        output_dir = Path("data/universe")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        universe_path = output_dir / f"universe_{year}_{month:02d}.parquet"
+        universe.to_parquet(universe_path)
+        
+        # Step 2: Create Labels
+        labels = run_label_workflow(universe)
+        
+        # Step 3: Discover Strategies
+        strategies = discover_strategies(config['strategies']['categories'])
+        
+        # Step 4: Generate Patterns (for each lookback)
+        lookbacks = config['backtest']['lookbacks']
+        print(f"\n🔄 Testing {len(lookbacks)} lookback periods: {lookbacks}")
+        
+        all_results = []
+        
+        for lookback in lookbacks:
+            print(f"\n{'─'*60}")
+            print(f"📊 Lookback: {lookback}")
+            print(f"{'─'*60}\n")
+            
+            patterns = run_patterns_workflow(universe, strategies, lookback)
+            
+            # Run backtest for this lookback
+            output_dir_lookback = Path(f"results/{year}-{month:02d}/lookback_{lookback}")
+            ranking = run_backtest_workflow(
+                patterns,
+                labels,
+                config['backtest']['risk_levels'],
+                config['backtest']['initial_balance'],
+                str(output_dir_lookback)
+            )
+            
+            all_results.append({
+                'lookback': lookback,
+                'ranking': ranking
+            })
+        
+        # Combine all results
+        print(f"\n{'='*80}")
+        print(f"📊 COMBINING RESULTS FROM ALL LOOKBACKS")
+        print(f"{'='*80}\n")
+        
+        import pandas as pd
+        all_rankings = []
+        for result in all_results:
+            df = result['ranking'].copy()
+            df['lookback'] = result['lookback']
+            all_rankings.append(df)
+        
+        combined = pd.concat(all_rankings, ignore_index=True)
+        combined = combined.sort_values('total_return', ascending=False).reset_index(drop=True)
+        combined.insert(0, 'overall_rank', range(1, len(combined) + 1))
+        
+        # Save combined ranking
+        final_output_dir = Path(f"results/{year}-{month:02d}")
+        final_ranking_path = final_output_dir / "ranking_all_lookbacks.csv"
+        combined.to_csv(final_ranking_path, index=False)
+        
+        # Show top 13 (the Legendaries)
+        print(f"🏆 TOP 13 LENDÁRIOS:\n")
+        print(combined.head(13).to_string(index=False))
     
     # Calculate execution time
     end_time = datetime.now()
@@ -266,10 +359,20 @@ def cmd_full(args, config):
     print(f"\n{'='*80}")
     print(f"✅ GRANDE TESTE COMPLETE!")
     print(f"{'='*80}")
-    print(f"📊 Results directory: {final_output_dir}")
-    print(f"🏆 Final ranking: {final_ranking_path}")
-    print(f"⏱️  Duration: {duration}")
-    print(f"🐉 Tested: {len(strategies)} strategies × {len(lookbacks)} lookbacks × {len(config['backtest']['risk_levels'])} risk levels")
+    
+    if pairs and base_url:
+        print(f"📊 Results directory: {Path(f'results/{year}-{month:02d}')}")
+        print(f"🏆 Final ranking: {Path(f'results/{year}-{month:02d}/ranking_all_pairs_lookbacks.csv')}")
+        print(f"⏱️  Duration: {duration}")
+        strategies_count = len(discover_strategies(config['strategies']['categories']))
+        print(f"🐉 Tested: {strategies_count} strategies × {len(pairs)} pairs × {len(lookbacks)} lookbacks × {len(config['backtest']['risk_levels'])} risk levels")
+    else:
+        print(f"📊 Results directory: {final_output_dir}")
+        print(f"🏆 Final ranking: {final_ranking_path}")
+        print(f"⏱️  Duration: {duration}")
+        strategies_count = len(strategies)
+        print(f"🐉 Tested: {strategies_count} strategies × {len(lookbacks)} lookbacks × {len(config['backtest']['risk_levels'])} risk levels")
+    
     print(f"{'='*80}\n")
 
 
