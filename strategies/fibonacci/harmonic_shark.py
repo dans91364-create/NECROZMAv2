@@ -9,7 +9,7 @@ class SharkPattern(Strategy):
     def __init__(self, params: Dict):
         super().__init__("SharkPattern", params)
         self.lookback = params.get("lookback", 50)
-        self.fib_level = params.get("fib_level", "XABCD Shark")
+        self.fib_level = params.get("fib_level", 0.886)  # Numeric fib level
         self.rules = [{"type": "entry_long", "condition": "price retraces to XABCD Shark level"}, {"type": "entry_short", "condition": "price extends beyond XABCD Shark"}]
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
