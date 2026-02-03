@@ -42,11 +42,12 @@ class ADXTrend(Strategy):
             up_move = high - high.shift(1)
             down_move = low.shift(1) - low
             
-            plus_dm = pd.Series(0, index=df.index)
-            minus_dm = pd.Series(0, index=df.index)
+            plus_dm = pd.Series(0.0, index=df.index, dtype=float)
+            minus_dm = pd.Series(0.0, index=df.index, dtype=float)
             
-            plus_dm[(up_move > down_move) & (up_move > 0)] = up_move
-            minus_dm[(down_move > up_move) & (down_move > 0)] = down_move
+            # Use where to avoid assignment issues
+            plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+            minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
             
             plus_di = 100 * (plus_dm.rolling(self.period).mean() / (atr + EPSILON))
             minus_di = 100 * (minus_dm.rolling(self.period).mean() / (atr + EPSILON))
@@ -94,11 +95,12 @@ class DMICrossover(Strategy):
             up_move = high - high.shift(1)
             down_move = low.shift(1) - low
             
-            plus_dm = pd.Series(0, index=df.index)
-            minus_dm = pd.Series(0, index=df.index)
+            plus_dm = pd.Series(0.0, index=df.index, dtype=float)
+            minus_dm = pd.Series(0.0, index=df.index, dtype=float)
             
-            plus_dm[(up_move > down_move) & (up_move > 0)] = up_move
-            minus_dm[(down_move > up_move) & (down_move > 0)] = down_move
+            # Use where to avoid assignment issues
+            plus_dm = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+            minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
             
             plus_di = 100 * (plus_dm.rolling(self.period).mean() / (atr + EPSILON))
             minus_di = 100 * (minus_dm.rolling(self.period).mean() / (atr + EPSILON))

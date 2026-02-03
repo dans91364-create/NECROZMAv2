@@ -22,7 +22,7 @@ class NegativeVolIndex(Strategy):
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
         if "volume" in df.columns:
-            nvi = pd.Series(1000, index=df.index)
+            nvi = pd.Series(1000.0, index=df.index, dtype=float)
             for i in range(1, len(df)):
                 if df["volume"].iloc[i] < df["volume"].iloc[i-1]:
                     nvi.iloc[i] = nvi.iloc[i-1] + (price.iloc[i] - price.iloc[i-1]) / price.iloc[i-1] * nvi.iloc[i-1]
@@ -39,7 +39,7 @@ class PositiveVolIndex(Strategy):
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
         if "volume" in df.columns:
-            pvi = pd.Series(1000, index=df.index)
+            pvi = pd.Series(1000.0, index=df.index, dtype=float)
             for i in range(1, len(df)):
                 if df["volume"].iloc[i] > df["volume"].iloc[i-1]:
                     pvi.iloc[i] = pvi.iloc[i-1] + (price.iloc[i] - price.iloc[i-1]) / price.iloc[i-1] * pvi.iloc[i-1]

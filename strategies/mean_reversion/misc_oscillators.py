@@ -1,5 +1,6 @@
 """Miscellaneous Oscillators"""
 import pandas as pd
+import numpy as np
 from typing import Dict
 from strategies.base import Strategy, EPSILON
 
@@ -52,7 +53,8 @@ class MFIStrategy(Strategy):
         signals = pd.Series(0, index=df.index)
         if "high" in df.columns and "volume" in df.columns:
             tp = (df["high"] + df["low"] + df.get("close", df.get("mid_price"))) / 3
-            mf, pmf, nmf = tp * df["volume"], (mf.where(tp > tp.shift(1), 0)).rolling(self.period).sum(), (mf.where(tp < tp.shift(1), 0)).rolling(self.period).sum()
+            mf = tp * df["volume"]
+            pmf, nmf = (mf.where(tp > tp.shift(1), 0)).rolling(self.period).sum(), (mf.where(tp < tp.shift(1), 0)).rolling(self.period).sum()
             mfi = 100 - 100 / (1 + pmf / (nmf + EPSILON))
             signals[mfi < self.oversold], signals[mfi > self.overbought] = 1, -1
         return signals
@@ -64,7 +66,8 @@ class ForceIndexOsc(Strategy):
         self.rules = [{"type": "entry_long", "condition": "Force Index > 0"}, {"type": "entry_short", "condition": "Force Index < 0"}]
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
-        volume, fi = df.get("volume", pd.Series(1, index=df.index)), (price.diff() * volume).ewm(span=self.period).mean()
+        volume = df.get("volume", pd.Series(1, index=df.index))
+        fi = (price.diff() * volume).ewm(span=self.period).mean()
         signals[(fi > 0) & (fi.shift(1) <= 0)], signals[(fi < 0) & (fi.shift(1) >= 0)] = 1, -1
         return signals
 
@@ -74,7 +77,8 @@ class TSIStrategy(Strategy):
         self.long_period, self.short_period, self.signal = params.get("long_period", 25), params.get("short_period", 13), params.get("signal_period", 7)
         self.rules = [{"type": "entry_long", "condition": "TSI crosses above signal"}, {"type": "entry_short", "condition": "TSI crosses below signal"}]
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
-        signals, price, momentum = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close"))), price.diff()
+        signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
+        momentum = price.diff()
         double_smoothed_pc = momentum.ewm(span=self.long_period).mean().ewm(span=self.short_period).mean()
         double_smoothed_apc = momentum.abs().ewm(span=self.long_period).mean().ewm(span=self.short_period).mean()
         tsi, sig = 100 * double_smoothed_pc / (double_smoothed_apc + EPSILON), (100 * double_smoothed_pc / (double_smoothed_apc + EPSILON)).ewm(span=self.signal).mean()
@@ -160,8 +164,8 @@ class FisherTransform(Strategy):
             median = (df["high"] + df["low"]) / 2
             ll, hh = median.rolling(self.period).min(), median.rolling(self.period).max()
             value = 0.5 * 2 * ((median - ll) / (hh - ll + EPSILON) - 0.5).clip(-0.999, 0.999)
-            fisher = pd.Series(index=df.index, dtype=float)
-            fisher.iloc[0] = 0
-            for i in range(1, len(df)): fisher.iloc[i] = 0.5 * fisher.iloc[i-1] + 0.5 * ((1 + value.iloc[i]) / (1 - value.iloc[i] + EPSILON)).apply(lambda x: 0.5 * pd.np.log(x) if x > 0 else 0)
+            # Vectorized Fisher Transform
+            fisher = 0.5 * np.log((1 + value) / (1 - value + EPSILON))
+            fisher = fisher.fillna(0)
             signals[(fisher > fisher.shift(1)) & (fisher.shift(1) <= fisher.shift(2))], signals[(fisher < fisher.shift(1)) & (fisher.shift(1) >= fisher.shift(2))] = 1, -1
         return signals

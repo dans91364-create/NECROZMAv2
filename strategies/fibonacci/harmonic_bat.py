@@ -9,7 +9,7 @@ class BatPattern(Strategy):
     def __init__(self, params: Dict):
         super().__init__("BatPattern", params)
         self.lookback = params.get("lookback", 50)
-        self.fib_level = params.get("fib_level", "XABCD Bat")
+        self.fib_level = params.get("fib_level", 0.886)  # Numeric fib level
         self.rules = [{"type": "entry_long", "condition": "price retraces to XABCD Bat level"}, {"type": "entry_short", "condition": "price extends beyond XABCD Bat"}]
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
@@ -25,7 +25,7 @@ class AlternateBat(Strategy):
     def __init__(self, params: Dict):
         super().__init__("AlternateBat", params)
         self.lookback = params.get("lookback", 50)
-        self.fib_level = params.get("fib_level", "Modified bat")
+        self.fib_level = params.get("fib_level", 1.13)  # Numeric fib level
         self.rules = [{"type": "entry_long", "condition": "price retraces to Modified bat level"}, {"type": "entry_short", "condition": "price extends beyond Modified bat"}]
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))

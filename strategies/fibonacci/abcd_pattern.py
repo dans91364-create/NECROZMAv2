@@ -9,7 +9,7 @@ class ABCDPattern(Strategy):
     def __init__(self, params: Dict):
         super().__init__("ABCDPattern", params)
         self.lookback = params.get("lookback", 50)
-        self.fib_level = params.get("fib_level", "Simple ABCD")
+        self.fib_level = params.get("fib_level", 0.618)  # Numeric fib level
         self.rules = [{"type": "entry_long", "condition": "price retraces to Simple ABCD level"}, {"type": "entry_short", "condition": "price extends beyond Simple ABCD"}]
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
@@ -25,7 +25,7 @@ class ThreeDrivesPattern(Strategy):
     def __init__(self, params: Dict):
         super().__init__("ThreeDrivesPattern", params)
         self.lookback = params.get("lookback", 50)
-        self.fib_level = params.get("fib_level", "Three drives")
+        self.fib_level = params.get("fib_level", 1.272)  # Numeric fib level
         self.rules = [{"type": "entry_long", "condition": "price retraces to Three drives level"}, {"type": "entry_short", "condition": "price extends beyond Three drives"}]
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         signals, price = pd.Series(0, index=df.index), df.get("mid_price", df.get("close", df.get("Close")))
